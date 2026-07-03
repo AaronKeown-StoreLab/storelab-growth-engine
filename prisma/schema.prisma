@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  industry  String?
+  website   String?
+  createdAt DateTime @default(now())
+
+  goals         Goal[]
+  people        Person[]
+  events        Event[]
+}
+
+model Person {
+  id          String   @id @default(cuid())
+  firstName   String
+  lastName    String
+  role         String?
+  linkedinUrl String?
+  email       String?
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Goal {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  date        DateTime
+  type        String
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+}
