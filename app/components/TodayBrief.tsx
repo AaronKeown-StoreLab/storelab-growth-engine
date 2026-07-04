@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AccountWorkspace from "./AccountWorkspace";
+import InboxPanel from "./InboxPanel";
 import QuickQuestion from "./QuickQuestion";
 import RelationshipCard from "./RelationshipCard";
 import { getAccountRecommendations } from "../engine/accountRecommendationEngine";
@@ -12,31 +13,33 @@ const changes = getSinceYesterdayChanges();
 
 export default function TodayBrief() {
   const [selectedAccount, setSelectedAccount] =
-    useState<AccountRecommendation | null>(null);
+    useState<AccountRecommendation | null>(recommendations[0] ?? null);
 
   const { currentPrompt, answerCurrent, askLater, hasPrompt } = useOneThing();
 
   return (
-    <section className="space-y-8">
+    <section className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden">
       {hasPrompt && currentPrompt && (
-        <QuickQuestion
-          question={currentPrompt.prompt}
-          options={
-            currentPrompt.type === "yesNo"
-              ? ["Yes", "No", "Not sure"]
-              : ["Capture note", "Skip for now"]
-          }
-          onAnswer={answerCurrent}
-          onLater={askLater}
-        />
+        <div className="mb-6">
+          <QuickQuestion
+            question={currentPrompt.prompt}
+            options={
+              currentPrompt.type === "yesNo"
+                ? ["Yes", "No", "Not sure"]
+                : ["Capture note", "Skip for now"]
+            }
+            onAnswer={answerCurrent}
+            onLater={askLater}
+          />
+        </div>
       )}
 
-      <div className="border-b border-white/10 pb-6">
+      <div className="border-b border-white/10 pb-5">
         <p className="text-xs uppercase tracking-[0.4em] text-gray-500">
           Today
         </p>
 
-        <div className="mt-5 space-y-3">
+        <div className="mt-4 space-y-3">
           {changes.map((change) => (
             <div key={change.id} className="flex items-start gap-4 text-sm">
               <span className="mt-0.5 text-cyan-300">
@@ -56,34 +59,32 @@ export default function TodayBrief() {
         </div>
       </div>
 
-      <div className="space-y-6">
-        {recommendations.map((recommendation, index) => {
-          const selected =
-            selectedAccount?.company.id === recommendation.company.id;
+      <div className="mt-6 grid min-h-0 flex-1 gap-8 lg:grid-cols-[1.35fr_1fr]">
+        <div className="no-scrollbar min-h-0 space-y-5 overflow-y-auto pr-2">
+          {recommendations.map((recommendation, index) => (
+            <RelationshipCard
+              key={recommendation.company.id}
+              recommendation={recommendation}
+              index={index}
+              selected={selectedAccount?.company.id === recommendation.company.id}
+              onOpen={() =>
+                setSelectedAccount((current) =>
+                  current?.company.id === recommendation.company.id
+                    ? null
+                    : recommendation
+                )
+              }
+            />
+          ))}
+        </div>
 
-          return (
-            <div key={recommendation.company.id} className="space-y-4">
-              <RelationshipCard
-                recommendation={recommendation}
-                index={index}
-                selected={selected}
-                onOpen={() =>
-                  setSelectedAccount((current) =>
-                    current?.company.id === recommendation.company.id
-                      ? null
-                      : recommendation
-                  )
-                }
-              />
-
-              {selected && (
-                <div className="border-l border-cyan-300/30 pl-6">
-                  <AccountWorkspace recommendation={recommendation} />
-                </div>
-              )}
-            </div>
-          );
-        })}
+        <div className="no-scrollbar min-h-0 overflow-y-auto border-l border-white/10 pl-8">
+          {selectedAccount ? (
+            <AccountWorkspace recommendation={selectedAccount} />
+          ) : (
+            <InboxPanel />
+          )}
+        </div>
       </div>
     </section>
   );

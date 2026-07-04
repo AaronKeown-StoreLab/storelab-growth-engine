@@ -1,8 +1,8 @@
-import { goals } from "../data/goals";
+import { goals } from "../data/goals"
 import { calculatePriority, calculateMomentum } from "./priorityEngine";
 import { companies } from "../data/companies";
-import { people } from "../data/people";
-import { relationships } from "../data/relationships";
+import { people } from "../data/people"
+import { relationships } from "../data/relationships"
 import { events } from "../data/events";
 import { Recommendation } from "../types/recommendation";
 

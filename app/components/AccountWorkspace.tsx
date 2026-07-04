@@ -1,9 +1,9 @@
-import { useState } from "react";
 import MetricCard from "./MetricCard";
 import Timeline from "./Timeline";
 import OutreachStudio from "./OutreachStudio";
-import WorkspaceTabs from "./WorkspaceTabs";
 import ChiefOfStaff from "./ChiefOfStaff";
+import LinkedInIntelligence from "./LinkedInIntelligence";
+import RelationshipTimeline from "./RelationshipTimeline";
 import { AccountRecommendation } from "../types/accountRecommendation";
 import { buildRelationshipMemory } from "../brain/relationshipMemory";
 
@@ -19,7 +19,6 @@ function getHealthLabel(score: number) {
 }
 
 export default function AccountWorkspace({ recommendation }: Props) {
-  const [tab, setTab] = useState("Overview");
   const memory = buildRelationshipMemory(recommendation);
 
   const healthScore = Math.round(
@@ -54,72 +53,58 @@ export default function AccountWorkspace({ recommendation }: Props) {
         />
       </div>
 
-      <WorkspaceTabs active={tab} onChange={setTab} />
+      <div className="mt-8 border-t border-white/10 pt-6">
+        <h3 className="text-xs uppercase tracking-[0.4em] text-gray-500">
+          Relationship Network
+        </h3>
 
-      {tab === "Overview" && (
-        <>
-          <div className="mt-8 border-t border-white/10 pt-6">
-            <h3 className="text-xs uppercase tracking-[0.4em] text-gray-500">
-              Relationship Network
-            </h3>
+        <div className="mt-5 divide-y divide-white/10">
+          {recommendation.contacts.map((contact) => (
+            <div
+              key={contact.id}
+              className="flex items-center justify-between py-5"
+            >
+              <div>
+                <p className="text-lg font-semibold">
+                  {contact.firstName} {contact.lastName}
+                </p>
 
-            <div className="mt-5 divide-y divide-white/10">
-              {recommendation.contacts.map((contact) => (
-                <div
-                  key={contact.id}
-                  className="flex items-center justify-between py-5"
-                >
-                  <div>
-                    <p className="text-lg font-semibold">
-                      {contact.firstName} {contact.lastName}
-                    </p>
+                <p className="mt-1 text-sm text-gray-400">{contact.role}</p>
+              </div>
 
-                    <p className="mt-1 text-sm text-gray-400">
-                      {contact.role}
-                    </p>
-                  </div>
-
-                  <div className="text-right">
-                    <p className="text-sm text-green-300">Warm</p>
-                  </div>
-                </div>
-              ))}
+              <p className="text-sm text-green-300">Warm</p>
             </div>
-          </div>
-
-          <div className="mt-8 grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
-            <MetricCard title="Priority" value={`${recommendation.signals.priority}%`} />
-            <MetricCard title="Momentum" value={`${recommendation.signals.momentum}%`} />
-            <MetricCard title="Opportunity" value={`${recommendation.signals.opportunity}%`} />
-          </div>
-
-          <div className="mt-8 border-t border-white/10 pt-6">
-            <p className="text-xs uppercase tracking-[0.4em] text-gray-500">
-              Relationship Memory
-            </p>
-
-            <pre className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-gray-300">
-              {memory}
-            </pre>
-          </div>
-        </>
-      )}
-
-      {tab === "Timeline" && <Timeline events={recommendation.events} />}
-
-      {tab === "Outreach" && (
-        <OutreachStudio recommendation={recommendation} />
-      )}
-
-      {tab === "Notes" && (
-        <div className="mt-8 border-t border-white/10 pt-6">
-          <p className="text-xs uppercase tracking-[0.4em] text-gray-500">
-            Notes
-          </p>
-
-          <p className="mt-3 text-gray-400">Notes will live here later.</p>
+          ))}
         </div>
-      )}
+      </div>
+
+      <LinkedInIntelligence />
+
+      <RelationshipTimeline />
+
+      <div className="mt-8 border-t border-white/10 pt-6">
+        <p className="text-xs uppercase tracking-[0.4em] text-gray-500">
+          Relationship Memory
+        </p>
+
+        <pre className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-gray-300">
+          {memory}
+        </pre>
+      </div>
+
+      <div className="mt-8 grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
+        <MetricCard title="Priority" value={`${recommendation.signals.priority}%`} />
+        <MetricCard title="Momentum" value={`${recommendation.signals.momentum}%`} />
+        <MetricCard title="Opportunity" value={`${recommendation.signals.opportunity}%`} />
+      </div>
+
+      <div className="mt-8 border-t border-white/10 pt-6">
+        <Timeline events={recommendation.events} />
+      </div>
+
+      <div className="mt-8 border-t border-white/10 pt-6">
+        <OutreachStudio recommendation={recommendation} />
+      </div>
     </div>
   );
 }

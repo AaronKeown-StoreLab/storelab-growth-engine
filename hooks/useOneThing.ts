@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { prompts } from "../app/data/prompts";
 import {
   getAvailablePrompts,
@@ -7,11 +7,17 @@ import {
 } from "../utils/promptStorage";
 
 export function useOneThing() {
+  const [mounted, setMounted] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const queue = useMemo(() => {
+    if (!mounted) return [];
     return getAvailablePrompts(prompts);
-  }, [refreshKey]);
+  }, [mounted, refreshKey]);
 
   const currentPrompt = queue[0] ?? null;
 
