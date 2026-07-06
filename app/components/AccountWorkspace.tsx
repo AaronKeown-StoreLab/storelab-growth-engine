@@ -2,7 +2,6 @@ import MetricCard from "./MetricCard";
 import Timeline from "./Timeline";
 import OutreachStudio from "./OutreachStudio";
 import ChiefOfStaff from "./ChiefOfStaff";
-import LinkedInIntelligence from "./LinkedInIntelligence";
 import RelationshipTimeline from "./RelationshipTimeline";
 import { AccountRecommendation } from "../types/accountRecommendation";
 import { buildRelationshipMemory } from "../brain/relationshipMemory";
@@ -77,8 +76,6 @@ export default function AccountWorkspace({ recommendation }: Props) {
           ))}
         </div>
       </div>
-
-      <LinkedInIntelligence />
 
       <RelationshipTimeline />
 

@@ -1,130 +1,148 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { ClipboardEvent, DragEvent, useRef, useState } from "react";
 
-type LinkedInDropzoneProps = {
-  onAnalyze?: () => void;
-};
+interface Props {
+  title: string;
+  description: string;
+  onImageSelected: (file: File) => void;
+}
 
-type Screenshot = {
-  id: string;
-  name: string;
-  preview: string;
-};
-
-export default function LinkedInDropzone({ onAnalyze }: LinkedInDropzoneProps) {
-  const [screenshots, setScreenshots] = useState<Screenshot[]>([]);
+export default function LinkedInDropzone({
+  title,
+  description,
+  onImageSelected,
+}: Props) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [lastFileName, setLastFileName] = useState<string | null>(null);
+  const [status, setStatus] = useState<string>("Waiting for screenshot");
 
   function handleFile(file: File) {
-    const screenshot = {
-      id: crypto.randomUUID(),
-      name: file.name || "Pasted screenshot",
-      preview: URL.createObjectURL(file),
-    };
-
-    setScreenshots((current) => [screenshot, ...current]);
-  }
-
-  function removeScreenshot(id: string) {
-    setScreenshots((current) => current.filter((item) => item.id !== id));
-  }
-
-  useEffect(() => {
-    function handlePaste(event: ClipboardEvent) {
-      const items = event.clipboardData?.items;
-      if (!items) return;
-
-      for (const item of Array.from(items)) {
-        if (item.type.startsWith("image/")) {
-          const file = item.getAsFile();
-          if (file) handleFile(file);
-          break;
-        }
-      }
+    if (!file.type.startsWith("image/")) {
+      setStatus("That was not an image");
+      return;
     }
 
-    window.addEventListener("paste", handlePaste);
+    setLastFileName(file.name || "Pasted screenshot");
+    setStatus("Screenshot captured");
+    onImageSelected(file);
+  }
 
-    return () => {
-      window.removeEventListener("paste", handlePaste);
-    };
-  }, []);
+  function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
+    const items = Array.from(event.clipboardData.items);
+    const imageItem = items.find((item) => item.type.startsWith("image/"));
+    const file = imageItem?.getAsFile();
+
+    if (file) {
+      handleFile(file);
+    } else {
+      setStatus("No image found on clipboard");
+    }
+  }
+
+  async function handlePasteButton() {
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+
+      for (const item of clipboardItems) {
+        const imageType = item.types.find((type) => type.startsWith("image/"));
+
+        if (!imageType) continue;
+
+        const blob = await item.getType(imageType);
+        const file = new File([blob], "linkedin-screenshot.png", {
+          type: imageType,
+        });
+
+        handleFile(file);
+        return;
+      }
+
+      setStatus("No image found on clipboard");
+    } catch {
+      setStatus("Press Ctrl+V inside this box instead");
+    }
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsDragging(false);
+
+    const file = event.dataTransfer.files?.[0];
+
+    if (file) {
+      handleFile(file);
+    }
+  }
 
   return (
     <div
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={(event) => {
+      tabIndex={0}
+      onPaste={handlePaste}
+      onDragOver={(event) => {
         event.preventDefault();
-        const files = Array.from(event.dataTransfer.files || []);
-        files.forEach((file) => {
-          if (file.type.startsWith("image/")) handleFile(file);
-        });
+        setIsDragging(true);
       }}
-      className="rounded-[2rem] border border-dashed border-cyan-300/30 bg-cyan-300/[0.06] p-8 transition hover:border-cyan-300/70 hover:bg-cyan-300/[0.10]"
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={handleDrop}
+      className={`border border-dashed p-6 text-center outline-none transition ${
+        isDragging
+          ? "border-cyan-300 bg-cyan-300/10"
+          : lastFileName
+            ? "border-cyan-300 bg-cyan-300/10"
+            : "border-cyan-300/30 hover:border-cyan-300 hover:bg-cyan-300/5"
+      }`}
     >
-      <p className="text-xs uppercase tracking-[0.35em] text-cyan-300">
-        LinkedIn Inbox
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(event) => {
+          if (event.target.files?.[0]) {
+            handleFile(event.target.files[0]);
+          }
+        }}
+      />
+
+      <p className="font-semibold">{title}</p>
+
+      <p className="mt-2 text-sm text-gray-400">{description}</p>
+
+      <div className="mt-5 flex justify-center gap-3">
+        <button
+          type="button"
+          onClick={handlePasteButton}
+          className="border border-cyan-300 px-4 py-2 text-sm text-cyan-300 transition hover:bg-cyan-300 hover:text-black"
+        >
+          Paste Screenshot
+        </button>
+
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="border border-white/10 px-4 py-2 text-sm text-gray-300 transition hover:border-white/30 hover:text-white"
+        >
+          Choose File
+        </button>
+      </div>
+
+      <p
+        className={`mt-4 text-sm ${
+          lastFileName ? "text-cyan-300" : "text-gray-500"
+        }`}
+      >
+        {status}
       </p>
 
-      <h3 className="mt-4 text-3xl font-semibold">
-        Drop or paste screenshots here.
-      </h3>
-
-      <p className="mt-3 max-w-lg text-gray-400">
-        Use Win + Shift + S on LinkedIn, then press Ctrl + V inside Growth Engine.
-      </p>
-
-      <label className="mt-6 inline-flex cursor-pointer rounded-full bg-cyan-300 px-5 py-3 text-sm font-semibold text-black transition hover:scale-105 hover:bg-cyan-200">
-        Choose screenshot
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(event) => {
-            const files = Array.from(event.target.files || []);
-            files.forEach((file) => handleFile(file));
-          }}
-        />
-      </label>
-
-      {screenshots.length > 0 && (
-        <div className="mt-8 space-y-4">
-          {screenshots.map((screenshot) => (
-            <div
-              key={screenshot.id}
-              className="rounded-3xl border border-white/10 bg-black/30 p-5"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm text-cyan-300">✓ Screenshot received</p>
-                  <p className="mt-1 text-white">{screenshot.name}</p>
-                </div>
-
-                <button
-                  onClick={() => removeScreenshot(screenshot.id)}
-                  className="rounded-full border border-white/10 px-3 py-1 text-sm text-gray-400 hover:text-white"
-                >
-                  Remove
-                </button>
-              </div>
-
-              <img
-                src={screenshot.preview}
-                alt="LinkedIn screenshot preview"
-                className="mt-5 max-h-72 w-full rounded-2xl object-contain"
-              />
-
-              <button
-                onClick={onAnalyze}
-                className="mt-6 w-full rounded-2xl bg-cyan-300 px-5 py-4 font-semibold text-black transition hover:scale-[1.02] hover:bg-cyan-200"
-              >
-                Analyse Screenshot
-              </button>
-            </div>
-          ))}
-        </div>
+      {lastFileName && (
+        <p className="mt-1 text-xs text-gray-500">Ready: {lastFileName}</p>
       )}
+
+      <p className="mt-4 text-xs text-gray-600">
+        You can also click this box and press Ctrl+V.
+      </p>
     </div>
   );
 }

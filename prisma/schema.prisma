@@ -7,48 +7,114 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Company {
+model Business {
   id        String   @id @default(cuid())
   name      String
   industry  String?
   website   String?
-  createdAt DateTime @default(now())
+  country   String?
+  status    String   @default("active")
+  summary   String?
 
-  goals         Goal[]
-  people        Person[]
-  events        Event[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employments   Employment[]
+  opportunities Opportunity[]
+  evidence      Evidence[]
+  timeline      TimelineEvent[]
+  inboxItems    InboxItem[]
 }
 
 model Person {
   id          String   @id @default(cuid())
   firstName   String
   lastName    String
-  role         String?
   linkedinUrl String?
   email       String?
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
+  phone       String?
+  notes       String?
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employments Employment[]
+  evidence    Evidence[]
+  timeline    TimelineEvent[]
 }
 
-model Goal {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
+model Employment {
+  id         String   @id @default(cuid())
+  personId   String
+  businessId String
 
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
+  jobTitle   String?
+  startDate  DateTime?
+  endDate    DateTime?
+  isCurrent  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  person   Person   @relation(fields: [personId], references: [id])
+  business Business @relation(fields: [businessId], references: [id])
 }
 
-model Event {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  date        DateTime
-  type        String
+model Opportunity {
+  id             String   @id @default(cuid())
+  businessId     String
+  title          String
+  status         String   @default("open")
+  estimatedValue Int?
+  nextAction     String?
+  summary        String?
 
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+}
+
+model Evidence {
+  id         String   @id @default(cuid())
+  businessId String?
+  personId   String?
+
+  type       String
+  title      String?
+  content    String
+  source     String?
+  capturedAt DateTime @default(now())
+
+  business Business? @relation(fields: [businessId], references: [id])
+  person   Person?   @relation(fields: [personId], references: [id])
+}
+
+model TimelineEvent {
+  id         String   @id @default(cuid())
+  businessId String?
+  personId   String?
+
+  eventType  String
+  summary    String
+  occurredAt DateTime @default(now())
+
+  business Business? @relation(fields: [businessId], references: [id])
+  person   Person?   @relation(fields: [personId], references: [id])
+}
+
+model InboxItem {
+  id         String   @id @default(cuid())
+  businessId String?
+
+  type      String
+  status    String   @default("pending")
+  title     String
+  summary   String?
+  payload   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business? @relation(fields: [businessId], references: [id])
 }
