@@ -1,36 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import InboxPanel from "./InboxPanel";
 import QuickQuestion from "./QuickQuestion";
 import LinkedInDropzone from "./LinkedInDropzone";
 import BusinessCard from "./BusinessCard";
+import BusinessWorkspace from "./BusinessWorkspace";
 import { getSinceYesterdayChanges } from "../engine/changeEngine";
 import { useOneThing } from "../../hooks/useOneThing";
+import { Business } from "../types/business";
 
 const changes = getSinceYesterdayChanges();
-
-type Business = {
-  id: string;
-  name: string;
-  industry?: string | null;
-  country?: string | null;
-  summary?: string | null;
-  opportunities?: {
-    id: string;
-    title: string;
-    nextAction?: string | null;
-    summary?: string | null;
-  }[];
-  employments?: {
-    id: string;
-    jobTitle?: string | null;
-    person: {
-      firstName: string;
-      lastName: string;
-    };
-  }[];
-};
 
 type ProspectIntelligence = {
   fullName: string;
@@ -70,6 +50,7 @@ function decisionLabel(decision?: string) {
 export default function TodayBrief() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
+  const [businessSearch, setBusinessSearch] = useState("");
 
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [activityImage, setActivityImage] = useState<File | null>(null);
@@ -78,6 +59,45 @@ export default function TodayBrief() {
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
 
   const { currentPrompt, answerCurrent, askLater, hasPrompt } = useOneThing();
+
+  const filteredBusinesses = useMemo(() => {
+    const query = businessSearch.trim().toLowerCase();
+
+    if (!query) return businesses;
+
+    return businesses.filter((business) => {
+      const people =
+        business.employments
+          ?.map(
+            (employment) =>
+              `${employment.person.firstName} ${employment.person.lastName} ${
+                employment.jobTitle ?? ""
+              }`
+          )
+          .join(" ") ?? "";
+
+      const opportunities =
+        business.opportunities
+          ?.map(
+            (opportunity) =>
+              `${opportunity.title} ${opportunity.summary ?? ""}`
+          )
+          .join(" ") ?? "";
+
+      return [
+        business.name,
+        business.industry,
+        business.country,
+        business.summary,
+        people,
+        opportunities,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [businessSearch, businesses]);
 
   useEffect(() => {
     async function loadBusinesses() {
@@ -148,46 +168,11 @@ export default function TodayBrief() {
         </div>
       )}
 
-      <div className="border-b border-white/10 pb-5">
-        <p className="text-xs uppercase tracking-[0.4em] text-gray-500">
-          Today
-        </p>
-
-        <div className="mt-4 space-y-3">
-          {changes.map((change) => (
-            <div key={change.id} className="flex items-start gap-4 text-sm">
-              <span className="mt-0.5 text-cyan-300">
-                {change.impact === "Positive"
-                  ? "↑"
-                  : change.impact === "Negative"
-                    ? "↓"
-                    : "→"}
-              </span>
-
-              <div>
-                <p className="font-medium text-white">{change.title}</p>
-                <p className="text-gray-500">{change.description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-6 grid min-h-0 flex-1 gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="grid min-h-0 flex-1 gap-8 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="no-scrollbar min-h-0 space-y-5 overflow-y-auto pr-2">
           <div className="border border-cyan-300/30 bg-cyan-300/5 p-5">
             <p className="text-xs uppercase tracking-[0.4em] text-cyan-300">
-              Prospect Intelligence
-            </p>
-
-            <h1 className="mt-3 text-2xl font-semibold text-white">
-              Research someone before you reach out
-            </h1>
-
-            <p className="mt-2 max-w-2xl text-sm text-gray-400">
-              Paste a LinkedIn profile screenshot, then optionally paste their
-              activity. StoreLab OS will assess whether they are worth pursuing,
-              why they matter, and how to approach them.
+              Capture
             </p>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -203,7 +188,7 @@ export default function TodayBrief() {
 
               <LinkedInDropzone
                 title="2. Activity Screenshot"
-                description="Optional, but important. Paste posts, comments or reactions."
+                description="Optional. Paste posts, comments or reactions."
                 onImageSelected={(file) => {
                   setActivityImage(file);
                   setProspect(null);
@@ -232,11 +217,6 @@ export default function TodayBrief() {
               >
                 Reset
               </button>
-
-              <p className="text-sm text-gray-500">
-                Profile: {profileImage ? "ready" : "missing"} · Activity:{" "}
-                {activityImage ? "ready" : "not supplied"}
-              </p>
             </div>
 
             {linkedinError && (
@@ -279,32 +259,34 @@ export default function TodayBrief() {
                   </div>
                 </div>
 
-                <div className="mt-6 grid gap-5 text-sm">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
-                      Why this person matters
-                    </p>
-                    <p className="mt-2 text-gray-300">
-                      {prospect.whyThisPersonMatters ||
-                        "Not enough visible evidence yet."}
-                    </p>
-                  </div>
-
-                  <div className="border border-cyan-300/20 bg-cyan-300/5 p-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-cyan-300">
-                      Suggested connection message
-                    </p>
-                    <p className="mt-3 text-gray-200">
-                      {prospect.suggestedConnectionMessage ||
-                        "No message generated."}
-                    </p>
-                  </div>
+                <div className="mt-6 border border-cyan-300/20 bg-cyan-300/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.25em] text-cyan-300">
+                    Suggested connection message
+                  </p>
+                  <p className="mt-3 text-gray-200">
+                    {prospect.suggestedConnectionMessage ||
+                      "No message generated."}
+                  </p>
                 </div>
               </div>
             )}
           </div>
 
-          {businesses.map((business) => (
+          <div className="sticky top-0 z-10 border border-white/10 bg-[#05080D]/95 p-4 backdrop-blur">
+            <input
+              value={businessSearch}
+              onChange={(event) => setBusinessSearch(event.target.value)}
+              placeholder="Search businesses, people, opportunities..."
+              className="w-full bg-transparent text-lg text-white outline-none placeholder:text-gray-600"
+            />
+
+            <p className="mt-2 text-xs text-gray-600">
+              {filteredBusinesses.length} business
+              {filteredBusinesses.length === 1 ? "" : "es"} shown
+            </p>
+          </div>
+
+          {filteredBusinesses.map((business) => (
             <BusinessCard
               key={business.id}
               business={business}
@@ -318,63 +300,23 @@ export default function TodayBrief() {
           ))}
         </div>
 
-        <div className="no-scrollbar min-h-0 overflow-y-auto border-l border-white/10 pl-8">
+        <div className="min-h-0 border-l border-white/10 pl-8">
           {selectedBusiness ? (
-            <div>
-              <p className="text-xs uppercase tracking-[0.4em] text-gray-500">
-                Business Workspace
-              </p>
+            <BusinessWorkspace
+  business={selectedBusiness}
+  onChanged={async () => {
+    const response = await fetch("/api/businesses");
+    const data = await response.json();
 
-              <h1 className="mt-5 text-4xl font-bold">
-                {selectedBusiness.name}
-              </h1>
+    setBusinesses(data);
 
-              <p className="mt-2 text-gray-400">
-                {[selectedBusiness.industry, selectedBusiness.country]
-                  .filter(Boolean)
-                  .join(" • ")}
-              </p>
+    const updatedSelected = data.find(
+      (business: Business) => business.id === selectedBusiness.id
+    );
 
-              <div className="mt-8 border border-white/10 p-5">
-                <p className="text-xs uppercase tracking-[0.3em] text-gray-500">
-                  AI Brief
-                </p>
-                <p className="mt-4 text-gray-300">
-                  {selectedBusiness.summary ||
-                    "No business intelligence summary captured yet."}
-                </p>
-              </div>
-
-              <div className="mt-8 border-t border-white/10 pt-6">
-                <p className="text-xs uppercase tracking-[0.3em] text-gray-500">
-                  Opportunities
-                </p>
-
-                <div className="mt-4 space-y-4">
-                  {selectedBusiness.opportunities?.length ? (
-                    selectedBusiness.opportunities.map((opportunity) => (
-                      <div
-                        key={opportunity.id}
-                        className="border border-white/10 p-4"
-                      >
-                        <p className="font-semibold text-white">
-                          {opportunity.title}
-                        </p>
-                        <p className="mt-2 text-sm text-gray-400">
-                          {opportunity.nextAction ||
-                            opportunity.summary ||
-                            "No next action captured."}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-500">
-                      No opportunities captured yet.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
+    setSelectedBusiness(updatedSelected ?? null);
+  }}
+/>
           ) : (
             <InboxPanel />
           )}
