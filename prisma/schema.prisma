@@ -24,6 +24,8 @@ model Business {
   evidence      Evidence[]
   timeline      TimelineEvent[]
   inboxItems    InboxItem[]
+  notebookEntries NotebookEntry[]
+  interactions    ContactInteraction[]
 }
 
 model Person {
@@ -41,6 +43,7 @@ model Person {
   employments Employment[]
   evidence    Evidence[]
   timeline    TimelineEvent[]
+  interactions ContactInteraction[]
 }
 
 model Employment {
@@ -117,4 +120,32 @@ model InboxItem {
   updatedAt DateTime @updatedAt
 
   business Business? @relation(fields: [businessId], references: [id])
+}
+model NotebookEntry {
+  id         String   @id @default(cuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  content    String
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model ContactInteraction {
+  id           String   @id @default(cuid())
+
+  personId      String
+  person        Person   @relation(fields: [personId], references: [id])
+
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id])
+
+  type          String
+  summary       String
+
+  occurredAt    DateTime @default(now())
+
+  createdAt     DateTime @default(now())
 }
