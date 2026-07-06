@@ -1,65 +1,51 @@
-import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const mars = await prisma.company.create({
+  const existingMars = await prisma.business.findFirst({
+    where: {
+      name: "Mars",
+    },
+  });
+
+  if (existingMars) {
+    console.log("Mars already exists");
+    return;
+  }
+
+  await prisma.business.create({
     data: {
-      id: "mars",
       name: "Mars",
       industry: "FMCG",
-      website: "https://www.mars.com",
-
-      people: {
+      country: "Global",
+      status: "active",
+      summary:
+        "Long-term StoreLab relationship connected to the Mars Growth Centre, research, virtual retail and storytelling opportunities.",
+      opportunities: {
         create: [
           {
-            firstName: "Simon",
-            lastName: "Watts",
-            role: "Global Growth Centre",
-          },
-          {
-            firstName: "Anna",
-            lastName: "Tkacheva",
-            role: "Global Insights",
-          },
-        ],
-      },
-
-      goals: {
-        create: {
-          title: "Secure next Virtual Research project",
-          description:
-            "Expand StoreLab's footprint within Mars through another research engagement.",
-        },
-      },
-
-      events: {
-        create: [
-          {
-            title: "Research opportunity identified",
-            description:
-              "Mars has an active opportunity around Virtual Research.",
-            date: new Date("2026-07-01"),
-            type: "note",
-          },
-          {
-            title: "No recent follow-up",
-            description:
-              "No meaningful follow-up has occurred recently.",
-            date: new Date("2026-07-03"),
-            type: "note",
+            title: "Growth Centre and Research",
+            status: "open",
+            nextAction:
+              "Arrange catch-up regarding Growth Centre and Research.",
+            summary:
+              "Mars has an active opportunity around Virtual Research and Growth Centre planning.",
           },
         ],
       },
     },
   });
 
-  console.log(`Seeded ${mars.name}`);
+  console.log("Seed complete");
 }
 
 main()
-  .catch(console.error)
-  .finally(async () => {
+  .then(async () => {
     await prisma.$disconnect();
+  })
+  .catch(async (error) => {
+    console.error(error);
+    await prisma.$disconnect();
+    process.exit(1);
   });

@@ -1,18 +1,36 @@
 "use client";
 
-import { useState } from "react";
-import AccountWorkspace from "./AccountWorkspace";
+import { useEffect, useState } from "react";
 import InboxPanel from "./InboxPanel";
 import QuickQuestion from "./QuickQuestion";
-import RelationshipCard from "./RelationshipCard";
 import LinkedInDropzone from "./LinkedInDropzone";
-import { getAccountRecommendations } from "../engine/accountRecommendationEngine";
+import BusinessCard from "./BusinessCard";
 import { getSinceYesterdayChanges } from "../engine/changeEngine";
-import { AccountRecommendation } from "../types/accountRecommendation";
 import { useOneThing } from "../../hooks/useOneThing";
 
-const recommendations = getAccountRecommendations();
 const changes = getSinceYesterdayChanges();
+
+type Business = {
+  id: string;
+  name: string;
+  industry?: string | null;
+  country?: string | null;
+  summary?: string | null;
+  opportunities?: {
+    id: string;
+    title: string;
+    nextAction?: string | null;
+    summary?: string | null;
+  }[];
+  employments?: {
+    id: string;
+    jobTitle?: string | null;
+    person: {
+      firstName: string;
+      lastName: string;
+    };
+  }[];
+};
 
 type ProspectIntelligence = {
   fullName: string;
@@ -21,44 +39,27 @@ type ProspectIntelligence = {
   currentEmployer: string;
   location: string;
   aboutSummary: string;
-
   targetingDecision: "connect" | "maybe" | "avoid";
   opportunityScore: number;
   relationshipValue: "low" | "medium" | "high";
   seniorityFit: "low" | "medium" | "high";
   storeLabRelevance: "low" | "medium" | "high";
-
   whyThisPersonMatters: string;
   whyConnectOrAvoid: string;
   storeLabAngle: string;
-
   linkedinActivityLevel: "unknown" | "none" | "low" | "medium" | "high";
   visibleActivitySummary: string;
   topicsTheyEngageWith: string[];
   linkedinEngagementLikelihood: "unknown" | "low" | "medium" | "high";
-
   bestApproach: string;
   suggestedConnectionMessage: string;
   suggestedFollowUp: string;
   nextAction: string;
-
   profilePhotoVisible: boolean;
   profilePhotoDescription: string;
-
   missingContext: string[];
   confidence: "low" | "medium" | "high";
 };
-
-function cleanJsonResult(result: unknown) {
-  if (typeof result !== "string") return result;
-
-  return JSON.parse(
-    result
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim()
-  );
-}
 
 function decisionLabel(decision?: string) {
   if (decision === "connect") return "Recommended";
@@ -67,8 +68,8 @@ function decisionLabel(decision?: string) {
 }
 
 export default function TodayBrief() {
-  const [selectedAccount, setSelectedAccount] =
-    useState<AccountRecommendation | null>(recommendations[0] ?? null);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
 
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [activityImage, setActivityImage] = useState<File | null>(null);
@@ -77,6 +78,18 @@ export default function TodayBrief() {
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
 
   const { currentPrompt, answerCurrent, askLater, hasPrompt } = useOneThing();
+
+  useEffect(() => {
+    async function loadBusinesses() {
+      const response = await fetch("/api/businesses");
+      const data = await response.json();
+
+      setBusinesses(data);
+      setSelectedBusiness(data[0] ?? null);
+    }
+
+    loadBusinesses();
+  }, []);
 
   async function analyseProspect() {
     if (!profileImage && !activityImage) {
@@ -105,7 +118,7 @@ export default function TodayBrief() {
         throw new Error(data.error || "Prospect analysis failed");
       }
 
-      setProspect(cleanJsonResult(data.result) as ProspectIntelligence);
+      setProspect(data.result as ProspectIntelligence);
     } catch (error) {
       console.error(error);
       setLinkedinError(
@@ -266,35 +279,6 @@ export default function TodayBrief() {
                   </div>
                 </div>
 
-                <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  <div className="border border-white/10 p-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
-                      StoreLab Fit
-                    </p>
-                    <p className="mt-2 text-lg text-white">
-                      {prospect.storeLabRelevance}
-                    </p>
-                  </div>
-
-                  <div className="border border-white/10 p-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
-                      Seniority
-                    </p>
-                    <p className="mt-2 text-lg text-white">
-                      {prospect.seniorityFit}
-                    </p>
-                  </div>
-
-                  <div className="border border-white/10 p-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
-                      LinkedIn Activity
-                    </p>
-                    <p className="mt-2 text-lg text-white">
-                      {prospect.linkedinActivityLevel}
-                    </p>
-                  </div>
-                </div>
-
                 <div className="mt-6 grid gap-5 text-sm">
                   <div>
                     <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
@@ -303,46 +287,6 @@ export default function TodayBrief() {
                     <p className="mt-2 text-gray-300">
                       {prospect.whyThisPersonMatters ||
                         "Not enough visible evidence yet."}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
-                      Connect or avoid?
-                    </p>
-                    <p className="mt-2 text-gray-300">
-                      {prospect.whyConnectOrAvoid ||
-                        "No clear recommendation yet."}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
-                      Activity read
-                    </p>
-                    <p className="mt-2 text-gray-300">
-                      {prospect.visibleActivitySummary ||
-                        "No activity visible. Paste an Activity screenshot to improve this assessment."}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
-                      Topics they engage with
-                    </p>
-                    <p className="mt-2 text-gray-300">
-                      {prospect.topicsTheyEngageWith?.length
-                        ? prospect.topicsTheyEngageWith.join(", ")
-                        : "No clear topics visible."}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
-                      Best approach
-                    </p>
-                    <p className="mt-2 text-gray-300">
-                      {prospect.bestApproach || prospect.storeLabAngle}
                     </p>
                   </div>
 
@@ -355,55 +299,19 @@ export default function TodayBrief() {
                         "No message generated."}
                     </p>
                   </div>
-
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
-                      Next action
-                    </p>
-                    <p className="mt-2 text-gray-300">
-                      {prospect.nextAction ||
-                        "Capture more context before deciding."}
-                    </p>
-                  </div>
-
-                  {prospect.missingContext?.length > 0 && (
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.25em] text-gray-500">
-                        Missing context
-                      </p>
-                      <p className="mt-2 text-gray-300">
-                        {prospect.missingContext.join(", ")}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <button className="border border-cyan-300 px-4 py-2 text-sm text-cyan-300 opacity-50">
-                    Continue
-                  </button>
-                  <button
-                    onClick={() => setProspect(null)}
-                    className="border border-white/10 px-4 py-2 text-sm text-gray-400 hover:border-white/30 hover:text-white"
-                  >
-                    Dismiss
-                  </button>
                 </div>
               </div>
             )}
           </div>
 
-          {recommendations.map((recommendation, index) => (
-            <RelationshipCard
-              key={recommendation.company.id}
-              recommendation={recommendation}
-              index={index}
-              selected={selectedAccount?.company.id === recommendation.company.id}
+          {businesses.map((business) => (
+            <BusinessCard
+              key={business.id}
+              business={business}
+              selected={selectedBusiness?.id === business.id}
               onOpen={() =>
-                setSelectedAccount((current) =>
-                  current?.company.id === recommendation.company.id
-                    ? null
-                    : recommendation
+                setSelectedBusiness((current) =>
+                  current?.id === business.id ? null : business
                 )
               }
             />
@@ -411,8 +319,62 @@ export default function TodayBrief() {
         </div>
 
         <div className="no-scrollbar min-h-0 overflow-y-auto border-l border-white/10 pl-8">
-          {selectedAccount ? (
-            <AccountWorkspace recommendation={selectedAccount} />
+          {selectedBusiness ? (
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-gray-500">
+                Business Workspace
+              </p>
+
+              <h1 className="mt-5 text-4xl font-bold">
+                {selectedBusiness.name}
+              </h1>
+
+              <p className="mt-2 text-gray-400">
+                {[selectedBusiness.industry, selectedBusiness.country]
+                  .filter(Boolean)
+                  .join(" • ")}
+              </p>
+
+              <div className="mt-8 border border-white/10 p-5">
+                <p className="text-xs uppercase tracking-[0.3em] text-gray-500">
+                  AI Brief
+                </p>
+                <p className="mt-4 text-gray-300">
+                  {selectedBusiness.summary ||
+                    "No business intelligence summary captured yet."}
+                </p>
+              </div>
+
+              <div className="mt-8 border-t border-white/10 pt-6">
+                <p className="text-xs uppercase tracking-[0.3em] text-gray-500">
+                  Opportunities
+                </p>
+
+                <div className="mt-4 space-y-4">
+                  {selectedBusiness.opportunities?.length ? (
+                    selectedBusiness.opportunities.map((opportunity) => (
+                      <div
+                        key={opportunity.id}
+                        className="border border-white/10 p-4"
+                      >
+                        <p className="font-semibold text-white">
+                          {opportunity.title}
+                        </p>
+                        <p className="mt-2 text-sm text-gray-400">
+                          {opportunity.nextAction ||
+                            opportunity.summary ||
+                            "No next action captured."}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      No opportunities captured yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
           ) : (
             <InboxPanel />
           )}
