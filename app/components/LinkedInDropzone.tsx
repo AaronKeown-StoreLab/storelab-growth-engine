@@ -15,17 +15,21 @@ export default function LinkedInDropzone({
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [lastFileName, setLastFileName] = useState<string | null>(null);
-  const [status, setStatus] = useState<string>("Waiting for screenshot");
+  const [hasCapture, setHasCapture] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isProfile = title.toLowerCase().includes("profile");
+  const capturedLabel = isProfile ? "Profile captured" : "Activity captured";
 
   function handleFile(file: File) {
     if (!file.type.startsWith("image/")) {
-      setStatus("That was not an image");
+      setError("That was not an image.");
       return;
     }
 
-    setLastFileName(file.name || "Pasted screenshot");
-    setStatus("Screenshot captured");
+    setHasCapture(true);
+    setError(null);
+    setIsDragging(false);
     onImageSelected(file);
   }
 
@@ -37,7 +41,7 @@ export default function LinkedInDropzone({
     if (file) {
       handleFile(file);
     } else {
-      setStatus("No image found on clipboard");
+      setError("No image found on clipboard.");
     }
   }
 
@@ -59,9 +63,9 @@ export default function LinkedInDropzone({
         return;
       }
 
-      setStatus("No image found on clipboard");
+      setError("No image found on clipboard.");
     } catch {
-      setStatus("Press Ctrl+V inside this box instead");
+      setError("Click inside this box and press Ctrl+V instead.");
     }
   }
 
@@ -89,9 +93,7 @@ export default function LinkedInDropzone({
       className={`border border-dashed p-6 text-center outline-none transition ${
         isDragging
           ? "border-cyan-300 bg-cyan-300/10"
-          : lastFileName
-            ? "border-cyan-300 bg-cyan-300/10"
-            : "border-cyan-300/30 hover:border-cyan-300 hover:bg-cyan-300/5"
+          : "border-cyan-300/30 hover:border-cyan-300 hover:bg-cyan-300/5"
       }`}
     >
       <input
@@ -108,41 +110,63 @@ export default function LinkedInDropzone({
 
       <p className="font-semibold">{title}</p>
 
-      <p className="mt-2 text-sm text-gray-400">{description}</p>
-
-      <div className="mt-5 flex justify-center gap-3">
-        <button
-          type="button"
-          onClick={handlePasteButton}
-          className="border border-cyan-300 px-4 py-2 text-sm text-cyan-300 transition hover:bg-cyan-300 hover:text-black"
-        >
-          Paste Screenshot
-        </button>
-
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="border border-white/10 px-4 py-2 text-sm text-gray-300 transition hover:border-white/30 hover:text-white"
-        >
-          Choose File
-        </button>
-      </div>
-
-      <p
-        className={`mt-4 text-sm ${
-          lastFileName ? "text-cyan-300" : "text-gray-500"
-        }`}
-      >
-        {status}
-      </p>
-
-      {lastFileName && (
-        <p className="mt-1 text-xs text-gray-500">Ready: {lastFileName}</p>
+      {!hasCapture && (
+        <p className="mt-2 text-sm text-gray-400">{description}</p>
       )}
 
-      <p className="mt-4 text-xs text-gray-600">
-        You can also click this box and press Ctrl+V.
-      </p>
+      {hasCapture ? (
+        <div className="mt-5">
+          <p className="text-sm font-semibold text-cyan-300">
+            ✓ {capturedLabel}
+          </p>
+
+          <p className="mt-2 text-sm text-gray-500">Ready for analysis</p>
+
+          <div className="mt-5 flex justify-center gap-3">
+            <button
+              type="button"
+              onClick={handlePasteButton}
+              className="border border-cyan-300/50 px-4 py-2 text-sm text-cyan-300 transition hover:bg-cyan-300 hover:text-black"
+            >
+              Paste New
+            </button>
+
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="border border-white/10 px-4 py-2 text-sm text-gray-300 transition hover:border-white/30 hover:text-white"
+            >
+              Replace
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-5 flex justify-center gap-3">
+          <button
+            type="button"
+            onClick={handlePasteButton}
+            className="border border-cyan-300 px-4 py-2 text-sm text-cyan-300 transition hover:bg-cyan-300 hover:text-black"
+          >
+            Paste
+          </button>
+
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="border border-white/10 px-4 py-2 text-sm text-gray-300 transition hover:border-white/30 hover:text-white"
+          >
+            Choose File
+          </button>
+        </div>
+      )}
+
+      {error && <p className="mt-4 text-sm text-red-300">{error}</p>}
+
+      {!hasCapture && !error && (
+        <p className="mt-4 text-xs text-gray-600">
+          Click this box and press Ctrl+V, or drag an image here.
+        </p>
+      )}
     </div>
   );
 }

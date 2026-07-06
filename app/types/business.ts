@@ -16,11 +16,26 @@ export type Business = {
   employments: {
     id: string;
     jobTitle?: string | null;
+    isCurrent: boolean;
 
     person: {
       id: string;
       firstName: string;
       lastName: string;
+      notes?: string | null;
     };
+  }[];
+
+  notebookEntries: {
+    id: string;
+    content: string;
+    createdAt: string;
+  }[];
+
+  timeline: {
+    id: string;
+    eventType: string;
+    summary: string;
+    occurredAt: string;
   }[];
 };
