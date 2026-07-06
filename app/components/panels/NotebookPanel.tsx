@@ -54,7 +54,7 @@ export default function NotebookPanel({ business, onChanged }: Props) {
   return (
     <section className="mt-8 border border-white/10 p-5">
       <p className="text-xs uppercase tracking-[0.3em] text-gray-500">
-        Notebook
+        Notes
       </p>
 
       <textarea

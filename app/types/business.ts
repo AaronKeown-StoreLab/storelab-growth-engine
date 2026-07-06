@@ -15,6 +15,8 @@ export type Business = {
 
   employments: {
     id: string;
+    personId: string;
+    businessId: string;
     jobTitle?: string | null;
     isCurrent: boolean;
 
@@ -30,6 +32,15 @@ export type Business = {
     id: string;
     content: string;
     createdAt: string;
+  }[];
+
+  interactions: {
+    id: string;
+    personId: string;
+    businessId: string;
+    type: string;
+    summary: string;
+    occurredAt: string;
   }[];
 
   timeline: {

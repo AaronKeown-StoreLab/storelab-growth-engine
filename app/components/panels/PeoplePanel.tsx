@@ -154,7 +154,7 @@ export default function PeoplePanel({ business, onChanged }: Props) {
                   <p className="text-sm text-cyan-300">Warm relationship</p>
 
                   <p className="mt-2 text-xs text-gray-500">
-                    Relationship workspace ready
+                    Open relationship activity
                   </p>
                 </div>
 
@@ -170,9 +170,11 @@ export default function PeoplePanel({ business, onChanged }: Props) {
       </section>
 
       <RelationshipDrawer
+        business={business}
         employment={selectedEmployment}
         open={Boolean(selectedEmployment)}
         onClose={() => setSelectedEmployment(null)}
+        onChanged={onChanged}
       />
     </>
   );

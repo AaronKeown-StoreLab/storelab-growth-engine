@@ -37,6 +37,11 @@ export async function getBusinesses() {
           createdAt: "desc",
         },
       },
+      interactions: {
+        orderBy: {
+          occurredAt: "desc",
+        },
+      },
       timeline: {
         orderBy: {
           occurredAt: "desc",

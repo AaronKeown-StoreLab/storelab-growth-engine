@@ -52,13 +52,41 @@ export default function TodayBrief() {
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [businessSearch, setBusinessSearch] = useState("");
 
-  const [profileImage, setProfileImage] = useState<File | null>(null);
-  const [activityImage, setActivityImage] = useState<File | null>(null);
+  const [sources, setSources] = useState<File[]>([]);
   const [isAnalysing, setIsAnalysing] = useState(false);
   const [prospect, setProspect] = useState<ProspectIntelligence | null>(null);
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
 
   const { currentPrompt, answerCurrent, askLater, hasPrompt } = useOneThing();
+
+  function addSource(file: File) {
+    setSources((current) => [...current, file]);
+    setProspect(null);
+    setLinkedinError(null);
+  }
+
+  function resetResearchSession() {
+    setSources([]);
+    setProspect(null);
+    setLinkedinError(null);
+  }
+
+  async function refreshBusinesses() {
+    const response = await fetch("/api/businesses");
+    const data = await response.json();
+
+    setBusinesses(data);
+
+    if (selectedBusiness) {
+      const updatedSelected = data.find(
+        (business: Business) => business.id === selectedBusiness.id
+      );
+
+      setSelectedBusiness(updatedSelected ?? null);
+    } else {
+      setSelectedBusiness(data[0] ?? null);
+    }
+  }
 
   const filteredBusinesses = useMemo(() => {
     const query = businessSearch.trim().toLowerCase();
@@ -100,20 +128,13 @@ export default function TodayBrief() {
   }, [businessSearch, businesses]);
 
   useEffect(() => {
-    async function loadBusinesses() {
-      const response = await fetch("/api/businesses");
-      const data = await response.json();
-
-      setBusinesses(data);
-      setSelectedBusiness(data[0] ?? null);
-    }
-
-    loadBusinesses();
+    refreshBusinesses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function analyseProspect() {
-    if (!profileImage && !activityImage) {
-      setLinkedinError("Paste at least one LinkedIn screenshot first.");
+    if (sources.length === 0) {
+      setLinkedinError("Add at least one source first.");
       return;
     }
 
@@ -124,8 +145,13 @@ export default function TodayBrief() {
     try {
       const formData = new FormData();
 
-      if (profileImage) formData.append("profile", profileImage);
-      if (activityImage) formData.append("activity", activityImage);
+      // Temporary bridge: current API still expects profile/activity.
+      // Next package will update /api/linkedin to accept unlimited sources.
+      formData.append("profile", sources[0]);
+
+      if (sources[1]) {
+        formData.append("activity", sources[1]);
+      }
 
       const response = await fetch("/api/linkedin", {
         method: "POST",
@@ -135,7 +161,7 @@ export default function TodayBrief() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Prospect analysis failed");
+        throw new Error(data.error || "Research analysis failed");
       }
 
       setProspect(data.result as ProspectIntelligence);
@@ -144,7 +170,7 @@ export default function TodayBrief() {
       setLinkedinError(
         error instanceof Error
           ? error.message
-          : "Could not analyse this prospect."
+          : "Could not analyse this research session."
       );
     } finally {
       setIsAnalysing(false);
@@ -172,51 +198,71 @@ export default function TodayBrief() {
         <div className="no-scrollbar min-h-0 space-y-5 overflow-y-auto pr-2">
           <div className="border border-cyan-300/30 bg-cyan-300/5 p-5">
             <p className="text-xs uppercase tracking-[0.4em] text-cyan-300">
-              Capture
+              Research Session
             </p>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <LinkedInDropzone
-                title="1. Profile Screenshot"
-                description="Paste the LinkedIn profile header/about section."
-                onImageSelected={(file) => {
-                  setProfileImage(file);
-                  setProspect(null);
-                  setLinkedinError(null);
-                }}
+                title="Source 1"
+                description="Add a source of intelligence."
+                onImageSelected={addSource}
               />
 
               <LinkedInDropzone
-                title="2. Activity Screenshot"
-                description="Optional. Paste posts, comments or reactions."
-                onImageSelected={(file) => {
-                  setActivityImage(file);
-                  setProspect(null);
-                  setLinkedinError(null);
-                }}
+                title="Source 2"
+                description="Add another source if required."
+                onImageSelected={addSource}
               />
+            </div>
+
+            <div className="mt-5 border border-white/10 bg-black/20 p-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-gray-500">
+                Sources
+              </p>
+
+              {sources.length ? (
+                <div className="mt-4 space-y-2">
+                  {sources.map((source, index) => (
+                    <div
+                      key={`${source.name}-${source.lastModified}-${index}`}
+                      className="flex items-center justify-between border border-white/10 px-3 py-2 text-sm"
+                    >
+                      <span className="text-gray-300">
+                        Source {index + 1}
+                      </span>
+
+                      <span className="text-gray-600">
+                        {source.type || "image"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-gray-500">
+                  No sources added yet.
+                </p>
+              )}
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <button
                 onClick={analyseProspect}
-                disabled={isAnalysing || (!profileImage && !activityImage)}
+                disabled={isAnalysing || sources.length === 0}
                 className="border border-cyan-300 px-5 py-2 text-sm font-medium text-cyan-300 transition hover:bg-cyan-300 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {isAnalysing ? "Building intelligence..." : "Analyse Prospect"}
+                {isAnalysing ? "Building intelligence..." : "Analyse"}
               </button>
 
               <button
-                onClick={() => {
-                  setProfileImage(null);
-                  setActivityImage(null);
-                  setProspect(null);
-                  setLinkedinError(null);
-                }}
+                onClick={resetResearchSession}
                 className="border border-white/10 px-5 py-2 text-sm text-gray-400 transition hover:border-white/30 hover:text-white"
               >
                 Reset
               </button>
+
+              <p className="text-sm text-gray-500">
+                {sources.length} source{sources.length === 1 ? "" : "s"} ready
+              </p>
             </div>
 
             {linkedinError && (
@@ -228,7 +274,7 @@ export default function TodayBrief() {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <p className="text-xs uppercase tracking-[0.4em] text-gray-500">
-                      Prospect Assessment
+                      Research Assessment
                     </p>
 
                     <h2 className="mt-3 text-2xl font-semibold text-white">
@@ -303,20 +349,9 @@ export default function TodayBrief() {
         <div className="min-h-0 border-l border-white/10 pl-8">
           {selectedBusiness ? (
             <BusinessWorkspace
-  business={selectedBusiness}
-  onChanged={async () => {
-    const response = await fetch("/api/businesses");
-    const data = await response.json();
-
-    setBusinesses(data);
-
-    const updatedSelected = data.find(
-      (business: Business) => business.id === selectedBusiness.id
-    );
-
-    setSelectedBusiness(updatedSelected ?? null);
-  }}
-/>
+              business={selectedBusiness}
+              onChanged={refreshBusinesses}
+            />
           ) : (
             <InboxPanel />
           )}
