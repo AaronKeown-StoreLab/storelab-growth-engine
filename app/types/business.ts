@@ -29,6 +29,14 @@ export type Business = {
     };
   }[];
 
+  evidence: {
+    id: string;
+    type: string;
+    title?: string | null;
+    content: string;
+    source?: string | null;
+    capturedAt: string;
+  }[];
   notebookEntries: {
     id: string;
     content: string;

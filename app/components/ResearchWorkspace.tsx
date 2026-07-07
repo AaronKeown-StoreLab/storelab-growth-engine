@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { Business } from "../types/business";
 
 type SourceKind =
   | "PDF"
@@ -23,6 +24,7 @@ type SourceKind =
   | "File";
 
 type SourceOrigin = "file" | "clipboard" | "url" | "drop";
+type ProposalAction = "create_business" | "attach_to_business";
 
 type ResearchSource = {
   id: string;
@@ -34,8 +36,18 @@ type ResearchSource = {
   detected: string[];
 };
 
-type Props = {
+type ResearchProposal = {
+  id: string;
+  sourceId: string;
+  action: ProposalAction;
+  title: string;
+  description: string;
   businessName?: string;
+};
+
+type Props = {
+  business?: Business | null;
+  onBusinessApproved: (business: Business) => void;
 };
 
 const urlPattern = /https?:\/\/[^\s<>"']+/gi;
@@ -160,6 +172,10 @@ function sourceFromText(value: string, origin: SourceOrigin): ResearchSource {
   };
 }
 
+function isTypingTarget(target: EventTarget | null) {
+  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+}
+
 function sourceBadge(source: ResearchSource) {
   if (source.kind === "Website") return "URL";
   if (source.kind === "Notes") return "TXT";
@@ -169,12 +185,51 @@ function sourceBadge(source: ResearchSource) {
   return extension ? extension.slice(0, 4).toUpperCase() : source.kind.slice(0, 4);
 }
 
-export default function ResearchWorkspace({ businessName }: Props) {
+function suggestedBusinessName(source: ResearchSource) {
+  if (source.kind !== "Website") return source.name;
+
+  const host = source.name.split(".")[0] ?? source.name;
+
+  return host
+    .split("-")
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
+function proposalsForSource(source: ResearchSource, business?: Business | null) {
+  const proposals: ResearchProposal[] = [];
+
+  if (business) {
+    proposals.push({
+      id: makeId(),
+      sourceId: source.id,
+      action: "attach_to_business",
+      title: `Add to ${business.name}`,
+      description: "Approve this source into the selected relationship workspace.",
+    });
+  }
+
+  proposals.push({
+    id: makeId(),
+    sourceId: source.id,
+    action: "create_business",
+    title: `Create ${suggestedBusinessName(source)}`,
+    description: "Approve this as a new customer/business workspace.",
+    businessName: suggestedBusinessName(source),
+  });
+
+  return proposals;
+}
+
+export default function ResearchWorkspace({ business, onBusinessApproved }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sources, setSources] = useState<ResearchSource[]>([]);
+  const [proposals, setProposals] = useState<ResearchProposal[]>([]);
   const [urlValue, setUrlValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [workingProposalId, setWorkingProposalId] = useState<string | null>(null);
 
   const sourceMix = useMemo(() => {
     const counts = sources.reduce<Record<SourceKind, number>>((current, source) => {
@@ -187,11 +242,23 @@ export default function ResearchWorkspace({ businessName }: Props) {
       .join(" | ");
   }, [sources]);
 
+  const pendingProposals = proposals.filter((proposal) =>
+    sources.some((source) => source.id === proposal.sourceId)
+  );
+
   function addSources(nextSources: ResearchSource[]) {
     if (!nextSources.length) return;
 
     setSources((current) => [...nextSources, ...current]);
-    setNotice(null);
+    setProposals((current) => [
+      ...nextSources.flatMap((source) => proposalsForSource(source, business)),
+      ...current,
+    ]);
+    setNotice(
+      nextSources.length === 1
+        ? `${nextSources[0].name} staged for approval.`
+        : `${nextSources.length} sources staged for approval.`
+    );
   }
 
   function addFiles(files: FileList | File[], origin: SourceOrigin) {
@@ -214,15 +281,73 @@ export default function ResearchWorkspace({ businessName }: Props) {
   }
 
   function addUrl() {
+    const trimmed = urlValue.trim();
+
+    if (!trimmed) {
+      setNotice("Paste a URL first, then add it to the session.");
+      return;
+    }
+
     try {
-      addSources([sourceFromUrl(urlValue, "url")]);
+      addSources([sourceFromUrl(trimmed, "url")]);
       setUrlValue("");
     } catch {
       setNotice("That link does not look ready yet.");
     }
   }
 
+  async function approveProposal(proposal: ResearchProposal) {
+    const source = sources.find((item) => item.id === proposal.sourceId);
+
+    if (!source) return;
+
+    setWorkingProposalId(proposal.id);
+    setNotice(null);
+
+    try {
+      const response = await fetch("/api/research/approvals", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: proposal.action,
+          businessId: proposal.action === "attach_to_business" ? business?.id : undefined,
+          businessName: proposal.businessName,
+          website: source.kind === "Website" ? source.detail : undefined,
+          source: {
+            name: source.name,
+            kind: source.kind,
+            detail: source.detail,
+            detected: source.detected,
+          },
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not approve this source.");
+      }
+
+      onBusinessApproved(data.business as Business);
+      setProposals((current) =>
+        current.filter((item) => item.sourceId !== proposal.sourceId)
+      );
+      setSources((current) => current.filter((item) => item.id !== proposal.sourceId));
+      setNotice(`${source.name} approved into Relationship OS.`);
+    } catch (caught) {
+      setNotice(
+        caught instanceof Error ? caught.message : "Could not approve this source."
+      );
+    } finally {
+      setWorkingProposalId(null);
+    }
+  }
+
   function handlePaste(event: ClipboardEvent<HTMLElement>) {
+    if (isTypingTarget(event.target)) return;
+
     const files = Array.from(event.clipboardData.files ?? []);
     const text = event.clipboardData.getData("text/plain");
 
@@ -270,6 +395,7 @@ export default function ResearchWorkspace({ businessName }: Props) {
 
   function removeSource(id: string) {
     setSources((current) => current.filter((source) => source.id !== id));
+    setProposals((current) => current.filter((proposal) => proposal.sourceId !== id));
   }
 
   return (
@@ -300,7 +426,7 @@ export default function ResearchWorkspace({ businessName }: Props) {
         <div>
           <p className="text-xs uppercase text-cyan-300">Research Session</p>
           <h2 className="mt-2 text-3xl font-bold leading-tight text-white">
-            {businessName ?? "New relationship"}
+            {business?.name ?? "New relationship"}
           </h2>
         </div>
 
@@ -321,15 +447,20 @@ export default function ResearchWorkspace({ businessName }: Props) {
           Drop, paste or browse anything
         </span>
         <span className="mt-2 max-w-xl text-sm leading-relaxed text-gray-400">
-          Files, screenshots, links, notes, decks, documents and reports all land
-          in one source list.
+          Sources become pending proposals. Nothing is added until you approve it.
         </span>
         <span className="mt-5 border border-cyan-300 px-4 py-2 text-sm font-medium text-cyan-300">
           Browse Files
         </span>
       </button>
 
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          addUrl();
+        }}
+        className="mt-4 flex flex-col gap-3 sm:flex-row"
+      >
         <input
           value={urlValue}
           onChange={(event) => setUrlValue(event.target.value)}
@@ -339,15 +470,14 @@ export default function ResearchWorkspace({ businessName }: Props) {
         />
 
         <button
-          type="button"
-          onClick={addUrl}
+          type="submit"
           className="min-h-11 border border-white/10 px-5 text-sm font-medium text-gray-200 transition hover:border-cyan-300/60 hover:text-cyan-300"
         >
           Add Link
         </button>
-      </div>
+      </form>
 
-      {notice && <p className="mt-3 text-sm text-amber-200">{notice}</p>}
+      {notice && <p className="mt-3 text-sm text-cyan-200">{notice}</p>}
 
       <div className="mt-6 border-t border-white/10 pt-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -361,7 +491,10 @@ export default function ResearchWorkspace({ businessName }: Props) {
           {sources.length > 0 && (
             <button
               type="button"
-              onClick={() => setSources([])}
+              onClick={() => {
+                setSources([]);
+                setProposals([]);
+              }}
               className="text-sm text-gray-500 transition hover:text-white"
             >
               Clear session
@@ -416,17 +549,55 @@ export default function ResearchWorkspace({ businessName }: Props) {
             ))
           ) : (
             <div className="py-8 text-sm text-gray-500">
-              Bring me information. I&apos;ll do the thinking.
+              Bring me information. I&apos;ll propose the next step.
             </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-5 border-t border-white/10 pt-5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs uppercase text-gray-500">Pending Approval</p>
+          <p className="text-sm text-gray-600">
+            {pendingProposals.length} proposal{pendingProposals.length === 1 ? "" : "s"}
+          </p>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {pendingProposals.length ? (
+            pendingProposals.map((proposal) => (
+              <div
+                key={proposal.id}
+                className="flex flex-col gap-3 border border-white/10 bg-black/20 p-3 md:flex-row md:items-center md:justify-between"
+              >
+                <div>
+                  <p className="text-sm font-medium text-white">{proposal.title}</p>
+                  <p className="mt-1 text-xs text-gray-500">{proposal.description}</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => approveProposal(proposal)}
+                  disabled={Boolean(workingProposalId)}
+                  className="min-h-10 border border-cyan-300 px-4 text-sm font-medium text-cyan-300 transition hover:bg-cyan-300 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {workingProposalId === proposal.id ? "Approving..." : "Approve"}
+                </button>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-gray-500">
+              Add a source and StoreLab OS will propose what can be approved.
+            </p>
           )}
         </div>
       </div>
 
       <div className="mt-5 grid gap-3 border-t border-white/10 pt-5 md:grid-cols-3">
         {[
-          ["Capture", sources.length ? `${sources.length} ready` : "Standing by"],
-          ["Prepare", sources.length ? "Brain queued" : "Waiting"],
-          ["Review", "User approval required"],
+          ["Capture", sources.length ? `${sources.length} staged` : "Standing by"],
+          ["Propose", pendingProposals.length ? "Approval needed" : "Waiting"],
+          ["Commit", "Only after approval"],
         ].map(([label, value]) => (
           <div key={label} className="border border-white/10 bg-black/20 p-3">
             <p className="text-xs text-gray-600">{label}</p>

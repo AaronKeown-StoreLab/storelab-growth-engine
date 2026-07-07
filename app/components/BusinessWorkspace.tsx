@@ -24,7 +24,7 @@ export default function BusinessWorkspace({ business, onChanged }: Props) {
 
       <OpportunitiesPanel business={business} />
 
-      <IntelligencePanel />
+      <IntelligencePanel business={business} />
 
       <TimelinePanel business={business} />
     </div>

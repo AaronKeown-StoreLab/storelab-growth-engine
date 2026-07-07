@@ -17,10 +17,13 @@ export default function TodayBrief() {
 
   const { currentPrompt, answerCurrent, askLater, hasPrompt } = useOneThing();
 
-  function handleBusinessCreated(business: Business) {
-    setBusinesses((current) =>
-      [...current, business].sort((a, b) => a.name.localeCompare(b.name))
-    );
+  function handleBusinessApproved(business: Business) {
+    setBusinesses((current) => {
+      const withoutExisting = current.filter((item) => item.id !== business.id);
+      return [...withoutExisting, business].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+    });
     setSelectedBusiness(business);
     setBusinessSearch("");
   }
@@ -121,7 +124,10 @@ export default function TodayBrief() {
 
       <div className="grid min-h-0 flex-1 gap-8 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="no-scrollbar min-h-0 space-y-5 overflow-y-auto pr-2">
-          <ResearchWorkspace businessName={selectedBusiness?.name} />
+          <ResearchWorkspace
+            business={selectedBusiness}
+            onBusinessApproved={handleBusinessApproved}
+          />
 
           <div className="sticky top-0 z-10 border border-white/10 bg-[#05080D]/95 p-4 backdrop-blur">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
@@ -139,7 +145,7 @@ export default function TodayBrief() {
                 </p>
               </div>
 
-              <AddBusinessPanel onCreated={handleBusinessCreated} />
+              <AddBusinessPanel onCreated={handleBusinessApproved} />
             </div>
           </div>
 

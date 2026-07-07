@@ -17,6 +17,11 @@ const businessInclude = {
       createdAt: "desc" as const,
     },
   },
+  evidence: {
+    orderBy: {
+      capturedAt: "desc" as const,
+    },
+  },
   inboxItems: {
     orderBy: {
       createdAt: "desc" as const,
@@ -53,6 +58,15 @@ export async function getBusinesses() {
   });
 }
 
+export async function getBusinessById(businessId: string) {
+  return prisma.business.findUnique({
+    where: {
+      id: businessId,
+    },
+    include: businessInclude,
+  });
+}
+
 export async function createBusiness(data: {
   name: string;
   website?: string;
@@ -72,6 +86,34 @@ export async function createBusiness(data: {
     },
     include: businessInclude,
   });
+}
+
+export async function addEvidenceToBusiness(data: {
+  businessId: string;
+  type: string;
+  title: string;
+  content: string;
+  source?: string;
+}) {
+  const evidence = await prisma.evidence.create({
+    data: {
+      businessId: data.businessId,
+      type: data.type,
+      title: data.title,
+      content: data.content,
+      source: data.source || null,
+    },
+  });
+
+  await prisma.timelineEvent.create({
+    data: {
+      businessId: data.businessId,
+      eventType: "source_approved",
+      summary: `${data.title} was approved into Relationship OS.`,
+    },
+  });
+
+  return evidence;
 }
 
 export async function addNotebookEntryToBusiness(
