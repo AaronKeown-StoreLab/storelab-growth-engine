@@ -10,7 +10,7 @@ type CapturePayload = {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
@@ -148,3 +148,17 @@ export async function POST(request: Request) {
   }
 }
 
+
+export async function DELETE() {
+  await prisma.inboxItem.updateMany({
+    where: {
+      type: "research_capture",
+      status: "pending",
+    },
+    data: {
+      status: "reviewed",
+    },
+  });
+
+  return responseJson({ success: true });
+}

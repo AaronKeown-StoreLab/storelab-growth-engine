@@ -11,10 +11,6 @@ type Props = {
 
 type Employment = Business["employments"][number];
 
-function getInitials(firstName: string, lastName: string) {
-  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-}
-
 export default function PeoplePanel({ business, onChanged }: Props) {
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [selectedEmployment, setSelectedEmployment] =
@@ -129,25 +125,16 @@ export default function PeoplePanel({ business, onChanged }: Props) {
               <button
                 key={employment.id}
                 onClick={() => setSelectedEmployment(employment)}
-                className="group border border-white/10 bg-white/[0.02] p-5 text-left transition hover:border-cyan-300/40 hover:bg-cyan-300/5"
+                className="group border border-white/10 bg-white/[0.02] p-5 text-left transition hover:border-white/30 hover:bg-white/[0.04]"
               >
-                <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-cyan-300/30 bg-cyan-300/10 text-sm font-semibold text-cyan-300">
-                    {getInitials(
-                      employment.person.firstName,
-                      employment.person.lastName
-                    )}
-                  </div>
+                <div className="min-w-0">
+                  <p className="text-lg font-semibold text-white">
+                    {employment.person.firstName} {employment.person.lastName}
+                  </p>
 
-                  <div className="min-w-0">
-                    <p className="text-lg font-semibold text-white">
-                      {employment.person.firstName} {employment.person.lastName}
-                    </p>
-
-                    <p className="mt-1 text-sm text-gray-400">
-                      {employment.jobTitle || "Role not captured yet"}
-                    </p>
-                  </div>
+                  <p className="mt-2 text-sm leading-relaxed text-gray-400">
+                    {employment.jobTitle || "Role not captured yet"}
+                  </p>
                 </div>
 
                 <div className="mt-5 border-t border-white/10 pt-4">
@@ -159,7 +146,7 @@ export default function PeoplePanel({ business, onChanged }: Props) {
                 </div>
 
                 <p className="mt-5 text-sm text-gray-400 transition group-hover:text-cyan-300">
-                  Open workspace →
+                  Open workspace -&gt;
                 </p>
               </button>
             ))

@@ -10,8 +10,36 @@ function cleanOptionalText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function optionalField(value: unknown) {
+function isPersonOrSocialProfileUrl(value: string) {
+  if (!value) return false;
+
+  try {
+    const url = new URL(value);
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    return (
+      host === "linkedin.com" ||
+      host.endsWith(".linkedin.com") ||
+      host === "facebook.com" ||
+      host.endsWith(".facebook.com") ||
+      host === "instagram.com" ||
+      host.endsWith(".instagram.com") ||
+      host === "x.com" ||
+      host === "twitter.com"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function cleanBusinessWebsite(value: unknown) {
   const cleaned = cleanOptionalText(value);
+
+  return isPersonOrSocialProfileUrl(cleaned) ? "" : cleaned;
+}
+
+function optionalField(value: unknown) {
+  const cleaned = cleanBusinessWebsite(value);
   return cleaned || undefined;
 }
 
@@ -59,7 +87,7 @@ export async function updateBusinessWorkspace(
 
   return updateBusiness(businessId, {
     name,
-    website: cleanOptionalText(input.website),
+    website: cleanBusinessWebsite(input.website),
     industry: cleanOptionalText(input.industry),
     country: cleanOptionalText(input.country),
     summary: cleanOptionalText(input.summary),

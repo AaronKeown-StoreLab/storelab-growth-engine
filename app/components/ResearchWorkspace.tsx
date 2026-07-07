@@ -392,11 +392,7 @@ export default function ResearchWorkspace({ business, businesses, onBusinessAppr
       }
 
       onBusinessApproved(data.business as Business);
-      if (source.captureId) {
-        void fetch(`/api/research/captures/${source.captureId}`, {
-          method: "DELETE",
-        });
-      }
+      clearCapture(source.captureId)
       setProposals((current) =>
         current.filter((item) => item.sourceId !== proposal.sourceId)
       );
@@ -467,10 +463,25 @@ export default function ResearchWorkspace({ business, businesses, onBusinessAppr
     );
   }
 
+  function clearCapture(captureId?: string) {
+    if (!captureId) return;
+
+    loadedCaptureIdsRef.current.delete(captureId);
+    void fetch(`/api/research/captures/${captureId}`, {
+      method: "DELETE",
+    });
+  }
+
   function removeProposal(proposalId: string) {
+    const proposal = proposals.find((item) => item.id === proposalId);
+
+    clearCapture(proposal?.captureId);
     setProposals((current) =>
-      current.filter((proposal) => proposal.id !== proposalId)
+      current.filter((item) => item.id !== proposalId)
     );
+    if (proposal) {
+      setSources((current) => current.filter((source) => source.id !== proposal.sourceId));
+    }
   }
 
   async function loadBrowserCaptures(options: { silent?: boolean } = {}) {
@@ -554,7 +565,10 @@ export default function ResearchWorkspace({ business, businesses, onBusinessAppr
   }, []);
 
   function removeSource(id: string) {
-    setSources((current) => current.filter((source) => source.id !== id));
+    const source = sources.find((item) => item.id === id);
+
+    clearCapture(source?.captureId);
+    setSources((current) => current.filter((item) => item.id !== id));
     setProposals((current) => current.filter((proposal) => proposal.sourceId !== id));
     setAnalysingSourceIds((current) => current.filter((sourceId) => sourceId !== id));
   }
@@ -662,6 +676,7 @@ export default function ResearchWorkspace({ business, businesses, onBusinessAppr
             <button
               type="button"
               onClick={() => {
+                sources.forEach((source) => clearCapture(source.captureId));
                 setSources([]);
                 setProposals([]);
                 setAnalysingSourceIds([]);
@@ -791,6 +806,7 @@ export default function ResearchWorkspace({ business, businesses, onBusinessAppr
     </section>
   );
 }
+
 
 
 

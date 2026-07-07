@@ -129,7 +129,7 @@ export async function approveResearchSource(input: ApprovalInput) {
     if (current) {
       await updateBusiness(businessId, {
         name: cleanText(proposal.businessUpdates.name) || current.name,
-        website: approvedBusinessWebsite(proposal.businessUpdates.website) || current.website || "",
+        website: approvedBusinessWebsite(proposal.businessUpdates.website) || approvedBusinessWebsite(current.website) || "",
         industry: cleanText(proposal.businessUpdates.industry) || current.industry || "",
         country: cleanText(proposal.businessUpdates.country) || current.country || "",
         summary: cleanText(proposal.businessUpdates.summary) || current.summary || "",
@@ -201,6 +201,7 @@ export async function approveResearchSource(input: ApprovalInput) {
 
   return business;
 }
+
 
 
 
