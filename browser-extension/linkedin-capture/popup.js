@@ -21,6 +21,8 @@ captureButton.addEventListener("click", async () => {
       throw new Error("Open a LinkedIn profile page first.");
     }
 
+    await ensureReader(tab.id);
+
     const response = await chrome.tabs.sendMessage(tab.id, {
       type: "STORELAB_CAPTURE_PROFILE",
     });
