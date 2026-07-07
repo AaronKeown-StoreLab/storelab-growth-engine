@@ -19,6 +19,7 @@ type ExtractedPerson = {
   employerName?: string;
   country?: string;
   previousEmployments?: string[];
+  activityInsights?: string[];
   connectionStatus?: "connection_requested" | "accepted" | "existing_contact";
 };
 
@@ -271,6 +272,72 @@ function previousExperienceSummaryFromContent(content: string) {
 
   return [`${previousEmployer}${roles.length ? `: ${roles.join(", ")}` : ""}`];
 }
+const activityEndHeadings = [
+  "Experience",
+  "Education",
+  "Licenses",
+  "Skills",
+  "Recommendations",
+  "Interests",
+  "More profiles for you",
+  "People you may know",
+];
+
+function activitySectionLines(content: string) {
+  const lines = contentLines(content);
+  const startIndex = lines.findIndex((line) => {
+    const lower = line.toLowerCase();
+
+    return lower === "activity" || lower === "activity section:";
+  });
+
+  if (startIndex < 0) return [];
+
+  const result: string[] = [];
+
+  for (const line of lines.slice(startIndex + 1)) {
+    if (activityEndHeadings.some((heading) => line.toLowerCase() === heading.toLowerCase())) {
+      break;
+    }
+
+    if (/^(activity|posts|comments|images|show all|show more|like|comment|repost|send|share)$/i.test(line)) {
+      continue;
+    }
+
+    result.push(line);
+  }
+
+  return result;
+}
+
+function shortInsight(value: string) {
+  const cleaned = value
+    .replace(/\.\.\.\s*more/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned.length > 220 ? `${cleaned.slice(0, 217)}...` : cleaned;
+}
+
+function activityInsightsFromContent(content: string) {
+  const lines = activitySectionLines(content);
+  const followerLine = lines.find((line) => /\b[\d,]+\s+followers\b/i.test(line));
+  const postLines = lines
+    .filter((line) => line.length > 35)
+    .filter((line) => !/\b(\d+\s+comments?|\d+\s+reposts?|followers|mutual|connection)\b/i.test(line))
+    .filter((line) => !/^\w+\s+\w+\s+(?:1st|2nd|3rd)\b/i.test(line))
+    .map(shortInsight)
+    .slice(0, 2);
+
+  if (!followerLine && postLines.length === 0) return [];
+
+  const insights = [];
+
+  if (followerLine) insights.push(`LinkedIn audience: ${followerLine}.`);
+  if (postLines.length) insights.push(`Recent activity themes: ${postLines.join(" | ")}`);
+
+  return insights;
+}
 
 function businessNameWithCountry(employerName: string, country: string) {
   if (!country) return employerName;
@@ -291,6 +358,7 @@ function personFromProfileLabels(content: string): ExtractedPerson | null {
   const country = countryFromContent(content);
   const currentExperience = currentExperienceFromContent(content);
   const previousEmployments = previousExperienceSummaryFromContent(content);
+  const activityInsights = activityInsightsFromContent(content);
   const connectionStatus = linkedinConnectionStatusFromContent(content);
 
   if (!profileName) return null;
@@ -311,6 +379,7 @@ function personFromProfileLabels(content: string): ExtractedPerson | null {
       (headlineMatch ? cleanExtractedEmployer(headlineMatch[2]) || undefined : undefined),
     country: currentExperience?.country || country || undefined,
     previousEmployments: previousEmployments.length ? previousEmployments : undefined,
+    activityInsights: activityInsights.length ? activityInsights : undefined,
     connectionStatus,
   };
 }
@@ -350,6 +419,7 @@ function nameFromSourceContent(content?: string): ExtractedPerson | null {
     jobTitle: jobTitle || undefined,
     employerName: employerName || undefined,
     country: countryFromContent(content) || undefined,
+    activityInsights: activityInsightsFromContent(content),
     connectionStatus: linkedinConnectionStatusFromContent(content),
   };
 }
@@ -414,13 +484,16 @@ function proposalPerson(source: ResearchSourceForAnalysis, person?: ExtractedPer
   const previousEmploymentNote = person.previousEmployments?.length
     ? ` Previous LinkedIn experience: ${person.previousEmployments.join("; ")}.`
     : "";
+  const activityInsightNote = person.activityInsights?.length
+    ? ` Activity insight: ${person.activityInsights.join(" ")}`
+    : "";
 
   return {
     firstName: person.firstName,
     lastName: person.lastName,
     jobTitle: person.jobTitle,
     linkedinUrl,
-    notes: `Captured from ${source.name}.${previousEmploymentNote}`,
+    notes: `Captured from ${source.name}.${previousEmploymentNote}${activityInsightNote}`,
     connectionStatus: person.connectionStatus ?? (linkedinUrl ? "connection_requested" as const : undefined),
   };
 }
@@ -594,6 +667,7 @@ Rules:
 - Prefer existing business matches over creating duplicates. Match by business name, brand, website domain, employer, and source content.
 - If a LinkedIn profile shows a person and employer, put the person in person and the employer/business in business matching fields. Never put a person LinkedIn URL in businessUpdates.website.
 - Read the LinkedIn Experience section when visible. The first experience item is current employment: role on the first line, business on the second line. Previous employers and roles belong in person notes/evidence, not as the current business.
+- Read the LinkedIn Activity section when visible. Use recent posts, comments, follower count, topics, and tone to judge whether they are active, what they care about, why they align with StoreLab, and what Aaron should say next. Keep this as a concise person note/evidence summary, not a raw activity dump.
 - Read LinkedIn relationship badges. If the profile says "1st" or "LinkedIn relationship: 1st", set person.connectionStatus to "accepted" because Aaron is already connected. If it says "2nd" or "3rd", set "connection_requested".
 - Use the LinkedIn location as country context for the business. Example: a person at Mars Wrigley with Location: Malaysia should create or match Mars Wrigley Malaysia, not generic Mars or Mars Australia.
 - If a LinkedIn URL alone does not expose employer/profile text, return needs_more_context instead of guessing or attaching to the selected business.

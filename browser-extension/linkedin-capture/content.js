@@ -80,6 +80,7 @@ if (!window.__STORELAB_LINKEDIN_CAPTURE_READY__) {
     ]).slice(0, 6);
     const educationHints = uniqueLines(linesFrom('a[href*="/school/"]')).slice(0, 4);
     const experience = sectionTextByHeading("Experience");
+    const activity = sectionTextByHeading("Activity");
     const relationship = connectionDegree();
     const content = [
       `Person LinkedIn URL: ${window.location.href}`,
@@ -87,6 +88,7 @@ if (!window.__STORELAB_LINKEDIN_CAPTURE_READY__) {
       headline ? `Headline: ${headline}` : "",
       location ? `Location: ${location}` : "",
       relationship ? `LinkedIn relationship: ${relationship}` : "",
+      activity ? `Activity section:\n${activity}` : "",
       companyHints.length ? `Company clues: ${companyHints.join(" | ")}` : "",
       educationHints.length ? `Education clues: ${educationHints.join(" | ")}` : "",
       experience ? `Experience section:\n${experience}` : "",
@@ -102,6 +104,7 @@ if (!window.__STORELAB_LINKEDIN_CAPTURE_READY__) {
       headline,
       location,
       relationship,
+      activity,
       companyHints,
       experience,
       content,
