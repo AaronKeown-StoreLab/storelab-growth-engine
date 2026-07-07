@@ -10,6 +10,54 @@ async function currentTab() {
   return tab;
 }
 
+function captureVisibleProfile() {
+  function cleanText(value) {
+    return String(value || "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function textFrom(selector) {
+    const element = document.querySelector(selector);
+    return cleanText(element?.innerText || element?.textContent || "");
+  }
+
+  function visibleProfileText() {
+    const main = document.querySelector("main") || document.body;
+    const sections = Array.from(main.querySelectorAll("section, header, div"))
+      .map((element) => cleanText(element.innerText || element.textContent || ""))
+      .filter((value) => value.length > 12);
+    const unique = Array.from(new Set(sections));
+
+    return unique.join("\n").slice(0, 20000);
+  }
+
+  const name =
+    textFrom("h1") ||
+    cleanText(document.title.replace(/\| LinkedIn.*/i, "")) ||
+    "LinkedIn profile";
+  const headline =
+    textFrom(".text-body-medium") ||
+    textFrom("div[data-generated-suggestion-target]");
+  const location = textFrom(".text-body-small.inline.t-black--light.break-words");
+  const content = [
+    `Profile name: ${name}`,
+    headline ? `Headline: ${headline}` : "",
+    location ? `Location: ${location}` : "",
+    "Visible LinkedIn page text:",
+    visibleProfileText(),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return {
+    url: window.location.href,
+    title: name,
+    content,
+    capturedAt: new Date().toISOString(),
+  };
+}
+
 captureButton.addEventListener("click", async () => {
   captureButton.disabled = true;
   setStatus("Reading visible LinkedIn profile...");
@@ -21,13 +69,12 @@ captureButton.addEventListener("click", async () => {
       throw new Error("Open a LinkedIn profile page first.");
     }
 
-    await ensureReader(tab.id);
-
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      type: "STORELAB_CAPTURE_PROFILE",
+    const [{ result: payload }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: captureVisibleProfile,
     });
 
-    if (!response?.ok) {
+    if (!payload?.content) {
       throw new Error("Could not read this profile page.");
     }
 
@@ -38,7 +85,7 @@ captureButton.addEventListener("click", async () => {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(response.payload),
+      body: JSON.stringify(payload),
     });
     const data = await storelabResponse.json();
 
