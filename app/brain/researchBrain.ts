@@ -94,20 +94,36 @@ function nameFromLinkedInUrl(detail: string): ExtractedPerson | null {
   }
 }
 
+function cleanExtractedRole(value?: string) {
+  return value
+    ?.replace(/^(is|a|an|the)\s+/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanExtractedEmployer(value?: string) {
+  return value
+    ?.replace(/\s+(Greater|Melbourne|Sydney|Brisbane|Perth|Adelaide|Victoria|NSW|Queensland)\b.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function nameFromSourceContent(content?: string): ExtractedPerson | null {
   if (!content) return null;
 
   const compact = content.replace(/\s+/g, " ").trim();
-  const match = compact.match(
-    /\b([A-Z][a-z]+)\s+([A-Z][a-z]+)\b.*?\b([^.,;\n]{2,80}?)\s+(?:at|with|for)\s+([A-Z0-9][A-Za-z0-9&' -]{1,80}?)(?=\s+(?:Melbourne|Sydney|Brisbane|Perth|Adelaide|Victoria|NSW|Queensland|and|in|from|based|is|was|on)|[.,;\n]|$)/
+  const atMatch = compact.match(
+    /\b([A-Z][a-z]+)\s+([A-Z][A-Za-z'-]+)\b.*?\b([^.,;\n]{2,80}?)\s+(?:at|with|for)\s+([A-Z0-9][A-Za-z0-9&.' -]{1,80}?)(?=\s+(?:Greater|Melbourne|Sydney|Brisbane|Perth|Adelaide|Victoria|NSW|Queensland|and|in|from|based|is|was|on)|[.,;\n]|$)/
   );
+  const commaMatch = compact.match(
+    /\b([A-Z][a-z]+)\s+([A-Z][A-Za-z'-]+)\b\s+([^,;\n]{2,80}?),\s+([A-Z0-9][A-Za-z0-9&.' -]{1,80}?)(?=\s+(?:Greater|Melbourne|Sydney|Brisbane|Perth|Adelaide|Victoria|NSW|Queensland|and|in|from|based|is|was|on)|[.,;\n]|$)/
+  );
+  const match = atMatch ?? commaMatch;
 
   if (!match) return null;
 
-  const jobTitle = match[3]
-    ?.replace(/^(is|a|an|the)\s+/i, "")
-    .trim();
-  const employerName = match[4]?.trim();
+  const jobTitle = cleanExtractedRole(match[3]);
+  const employerName = cleanExtractedEmployer(match[4]);
 
   return {
     firstName: `${match[1].charAt(0).toUpperCase()}${match[1].slice(1)}`,
@@ -122,12 +138,11 @@ function employerFromContent(content?: string) {
 
   const compact = content.replace(/\s+/g, " ").trim();
   const match = compact.match(
-    /\b(?:works?\s+(?:at|with|for)|employed\s+(?:at|by)|(?:at|with|for))\s+([A-Z0-9][A-Za-z0-9&' -]{1,80}?)(?=\s+(?:Melbourne|Sydney|Brisbane|Perth|Adelaide|Victoria|NSW|Queensland|and|in|from|based|is|was|on)|[.,;\n]|$)/
+    /\b(?:works?\s+(?:at|with|for)|employed\s+(?:at|by)|(?:at|with|for))\s+([A-Z0-9][A-Za-z0-9&.' -]{1,80}?)(?=\s+(?:Greater|Melbourne|Sydney|Brisbane|Perth|Adelaide|Victoria|NSW|Queensland|and|in|from|based|is|was|on)|[.,;\n]|$)/
   );
 
-  return match?.[1]?.trim() ?? "";
+  return cleanExtractedEmployer(match?.[1]) ?? "";
 }
-
 function linkedinUrlFromDetail(detail: string) {
   const host = hostFromDetail(detail);
 

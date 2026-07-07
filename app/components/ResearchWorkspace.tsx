@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { Business } from "../types/business";
+import ResearchProposalCard from "./ResearchProposalCard";
 import {
   ResearchAnalysis,
   ResearchProposal,
@@ -249,6 +250,8 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
             detail: source.detail,
             detected: source.detected,
             content: source.content,
+            imageDataUrl: source.imageDataUrl,
+            mimeType: source.mimeType,
           },
           preferredBusinessId: business?.id,
         }),
@@ -357,6 +360,8 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
             detail: source.detail,
             detected: source.detected,
             content: source.content,
+            imageDataUrl: source.imageDataUrl,
+            mimeType: source.mimeType,
           },
           preferredBusinessId: business?.id,
         }),
@@ -431,6 +436,19 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
     }
   }
 
+  function updateProposal(nextProposal: PendingProposal) {
+    setProposals((current) =>
+      current.map((proposal) =>
+        proposal.id === nextProposal.id ? nextProposal : proposal
+      )
+    );
+  }
+
+  function removeProposal(proposalId: string) {
+    setProposals((current) =>
+      current.filter((proposal) => proposal.id !== proposalId)
+    );
+  }
   function removeSource(id: string) {
     setSources((current) => current.filter((source) => source.id !== id));
     setProposals((current) => current.filter((proposal) => proposal.sourceId !== id));
@@ -565,6 +583,15 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
                     {source.kind} | {source.detail}
                   </p>
 
+                  {source.imageDataUrl && (
+                    <div
+                      aria-label={source.name}
+                      className="mt-3 h-28 max-w-sm border border-white/10 bg-contain bg-center bg-no-repeat"
+                      role="img"
+                      style={{ backgroundImage: `url(${source.imageDataUrl})` }}
+                    />
+                  )}
+
                   <div className="mt-3 flex flex-wrap gap-2">
                     {source.detected.map((item) => (
                       <span
@@ -611,42 +638,14 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
         <div className="mt-4 space-y-3">
           {pendingProposals.length ? (
             pendingProposals.map((proposal) => (
-              <div
+              <ResearchProposalCard
                 key={proposal.id}
-                className="flex flex-col gap-3 border border-white/10 bg-black/20 p-3"
-              >
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium text-white">{proposal.title}</p>
-                      <span className="border border-white/10 px-2 py-1 text-xs text-gray-500">
-                        {proposal.confidence} confidence
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500">{proposal.description}</p>
-                    {proposal.action === "needs_more_context" && (
-                      <p className="mt-2 text-xs text-amber-200">
-                        Add profile text, a screenshot, or use the browser extension capture when available.
-                      </p>
-                    )}
-                    {proposal.person?.firstName && proposal.person.lastName && (
-                      <p className="mt-2 text-xs text-cyan-200">
-                        Customer: {proposal.person.firstName} {proposal.person.lastName}
-                        {proposal.person.jobTitle ? `, ${proposal.person.jobTitle}` : ""}
-                      </p>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => approveProposal(proposal)}
-                    disabled={Boolean(workingProposalId) || proposal.action === "needs_more_context"}
-                    className="min-h-10 border border-cyan-300 px-4 text-sm font-medium text-cyan-300 transition hover:bg-cyan-300 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {proposal.action === "needs_more_context" ? "Needs Source" : workingProposalId === proposal.id ? "Approving..." : "Approve"}
-                  </button>
-                </div>
-              </div>
+                proposal={proposal}
+                isWorking={workingProposalId === proposal.id}
+                onApprove={approveProposal}
+                onDelete={removeProposal}
+                onChange={updateProposal}
+              />
             ))
           ) : (
             <p className="text-sm text-gray-500">
