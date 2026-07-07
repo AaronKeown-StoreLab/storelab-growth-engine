@@ -32,6 +32,32 @@ function confidenceLabel(value: ResearchProposal["confidence"]) {
   return "Low confidence";
 }
 
+function normalise(value?: string | null) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function personExistsInBusinesses(proposal: PendingProposal, businesses: Business[]) {
+  const firstName = normalise(proposal.person?.firstName);
+  const lastName = normalise(proposal.person?.lastName);
+  const linkedinUrl = normalise(proposal.person?.linkedinUrl);
+  const email = normalise(proposal.person?.email);
+
+  return businesses.some((business) =>
+    business.employments.some((employment) => {
+      const person = employment.person;
+      const sameLinkedIn = linkedinUrl && normalise(person.linkedinUrl) === linkedinUrl;
+      const sameEmail = email && normalise(person.email) === email;
+      const sameName =
+        firstName &&
+        lastName &&
+        normalise(person.firstName) === firstName &&
+        normalise(person.lastName) === lastName;
+
+      return Boolean(sameLinkedIn || sameEmail || sameName);
+    })
+  );
+}
+
 export default function ResearchProposalCard({
   proposal,
   businesses,
@@ -40,7 +66,15 @@ export default function ResearchProposalCard({
   onDelete,
   onChange,
 }: Props) {
-  const canApprove = proposal.action !== "needs_more_context";
+  const isExistingPerson = personExistsInBusinesses(proposal, businesses);
+  const isLinkedInPerson = Boolean(proposal.person?.linkedinUrl?.includes("linkedin.com"));
+  const connectionAccepted = proposal.person?.connectionStatus === "accepted";
+  const needsAcceptedConnection =
+    isLinkedInPerson &&
+    Boolean(proposal.person?.firstName && proposal.person?.lastName) &&
+    !isExistingPerson &&
+    !connectionAccepted;
+  const canApprove = proposal.action !== "needs_more_context" && !needsAcceptedConnection;
 
   function updateProposal(patch: Partial<PendingProposal>) {
     onChange({
@@ -68,6 +102,16 @@ export default function ResearchProposalCard({
       person: {
         ...(proposal.person ?? {}),
         [key]: value,
+      },
+    });
+  }
+
+  function markConnectionAccepted() {
+    onChange({
+      ...proposal,
+      person: {
+        ...(proposal.person ?? {}),
+        connectionStatus: "accepted",
       },
     });
   }
@@ -150,11 +194,26 @@ export default function ResearchProposalCard({
             disabled={isWorking || !canApprove}
             className="min-h-10 border border-cyan-300 px-4 text-sm font-medium text-cyan-300 transition hover:bg-cyan-300 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {!canApprove ? "Needs Source" : isWorking ? "Approving..." : "Approve"}
+            {needsAcceptedConnection ? "Awaiting Accept" : !canApprove ? "Needs Source" : isWorking ? "Approving..." : "Approve"}
           </button>
         </div>
       </div>
 
+
+      {needsAcceptedConnection && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border border-amber-300/30 bg-amber-300/5 p-3">
+          <p className="text-xs leading-relaxed text-amber-100">
+            New LinkedIn prospect. Send the connection request first; add them as a customer after they accept.
+          </p>
+          <button
+            type="button"
+            onClick={markConnectionAccepted}
+            className="border border-amber-200/60 px-3 py-2 text-xs font-medium text-amber-100 transition hover:bg-amber-200 hover:text-black"
+          >
+            Mark Accepted
+          </button>
+        </div>
+      )}
       {proposal.action === "needs_more_context" && (
         <p className="mt-3 border-l border-amber-300/50 pl-3 text-xs text-amber-200">
           Add profile text, a screenshot, or a fuller webpage capture so the Brain can identify the employer before saving anything.
@@ -272,3 +331,4 @@ export default function ResearchProposalCard({
     </div>
   );
 }
+

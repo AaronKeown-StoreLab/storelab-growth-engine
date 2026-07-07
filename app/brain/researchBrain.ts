@@ -120,27 +120,37 @@ function personFromProfileLabels(content: string): ExtractedPerson | null {
   const profileName = lineValue(content, "Profile name");
   const headline = lineValue(content, "Headline");
 
-  if (!profileName || !headline) return null;
+  if (!profileName) return null;
 
   const nameParts = profileName.split(/\s+/).filter(Boolean);
-  const headlineMatch = headline.match(/^(.+?)\s+(?:at|with|for)\s+(.+)$/i);
+  const headlineMatch = headline.match(/^(.+?)\s+(?:at|with|for|@)\s+(.+)$/i);
 
-  if (nameParts.length < 2 || !headlineMatch) return null;
+  if (nameParts.length < 2) return null;
 
   return {
     firstName: nameParts[0],
     lastName: nameParts.slice(1).join(" "),
-    jobTitle: cleanExtractedRole(headlineMatch[1]) || undefined,
-    employerName: cleanExtractedEmployer(headlineMatch[2]) || undefined,
+    jobTitle: headlineMatch ? cleanExtractedRole(headlineMatch[1]) || undefined : undefined,
+    employerName: headlineMatch ? cleanExtractedEmployer(headlineMatch[2]) || undefined : undefined,
   };
 }
+
+function contentWithoutMetadata(content: string) {
+  return content
+    .split(/\r?\n|`n/g)
+    .filter((line) => !/^\s*(person linkedin url|profile name|headline|location|company clues|education clues):/i.test(line))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function nameFromSourceContent(content?: string): ExtractedPerson | null {
   if (!content) return null;
 
   const labelledPerson = personFromProfileLabels(content);
   if (labelledPerson) return labelledPerson;
 
-  const compact = content.replace(/\s+/g, " ").trim();
+  const compact = contentWithoutMetadata(content);
   const atMatch = compact.match(
     /\b([A-Z][a-z]+)\s+([A-Z][A-Za-z'-]+)\b.*?\b([^.,;\n]{2,80}?)\s+(?:at|with|for)\s+([A-Z0-9][A-Za-z0-9&.' -]{1,80}?)(?=\s+(?:Greater|Melbourne|Sydney|Brisbane|Perth|Adelaide|Victoria|NSW|Queensland|and|in|from|based|is|was|on)|[.,;\n]|$)/
   );
@@ -218,12 +228,15 @@ function findBusinessMatch(source: ResearchSourceForAnalysis, businesses: Resear
 function proposalPerson(source: ResearchSourceForAnalysis, person?: ExtractedPerson | null) {
   if (!person) return undefined;
 
+  const linkedinUrl = linkedinUrlFromDetail(source.detail);
+
   return {
     firstName: person.firstName,
     lastName: person.lastName,
     jobTitle: person.jobTitle,
-    linkedinUrl: linkedinUrlFromDetail(source.detail),
+    linkedinUrl,
     notes: `Captured from ${source.name}.`,
+    connectionStatus: linkedinUrl ? "connection_requested" as const : undefined,
   };
 }
 
@@ -442,4 +455,7 @@ Rules:
     return fallback;
   }
 }
+
+
+
 

@@ -5,6 +5,7 @@ import {
   ClipboardEvent,
   DragEvent,
   KeyboardEvent,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -226,6 +227,7 @@ function sourceBadge(source: ResearchSource) {
 
 export default function ResearchWorkspace({ business, businesses, onBusinessApproved }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const loadedCaptureIdsRef = useRef<Set<string>>(new Set());
   const [sources, setSources] = useState<ResearchSource[]>([]);
   const [proposals, setProposals] = useState<PendingProposal[]>([]);
   const [urlValue, setUrlValue] = useState("");
@@ -471,9 +473,9 @@ export default function ResearchWorkspace({ business, businesses, onBusinessAppr
     );
   }
 
-  async function loadBrowserCaptures() {
+  async function loadBrowserCaptures(options: { silent?: boolean } = {}) {
     setIsLoadingCaptures(true);
-    setNotice(null);
+    if (!options.silent) setNotice(null);
 
     try {
       const response = await fetch("/api/research/captures");
@@ -483,18 +485,27 @@ export default function ResearchWorkspace({ business, businesses, onBusinessAppr
         throw new Error("error" in captures ? captures.error : "Could not load browser captures.");
       }
 
+      const newCaptures = captures.filter(
+        (capture) => !loadedCaptureIdsRef.current.has(capture.id)
+      );
+
+      if (!newCaptures.length) {
+        if (!options.silent) setNotice("No new browser captures waiting yet.");
+        return;
+      }
+
       const capturedAt = new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       });
-      const nextSources: ResearchSource[] = captures.map((capture) => ({
+      const nextSources: ResearchSource[] = newCaptures.map((capture) => ({
         ...capture.payload.source,
         id: `capture-${capture.id}`,
         origin: "url",
         capturedAt,
         captureId: capture.id,
       }));
-      const nextProposals: PendingProposal[] = captures.flatMap((capture) =>
+      const nextProposals: PendingProposal[] = newCaptures.flatMap((capture) =>
         capture.payload.analysis.proposals.map((proposal) => ({
           ...proposal,
           id: makeId(),
@@ -503,19 +514,44 @@ export default function ResearchWorkspace({ business, businesses, onBusinessAppr
         }))
       );
 
+      newCaptures.forEach((capture) => loadedCaptureIdsRef.current.add(capture.id));
       setSources((current) => [...nextSources, ...current]);
       setProposals((current) => [...nextProposals, ...current]);
       setNotice(
-        captures.length
-          ? `${captures.length} browser capture${captures.length === 1 ? "" : "s"} loaded for review.`
-          : "No browser captures waiting yet."
+        `${newCaptures.length} browser capture${newCaptures.length === 1 ? "" : "s"} loaded for review.`
       );
     } catch (caught) {
-      setNotice(caught instanceof Error ? caught.message : "Could not load browser captures.");
+      if (!options.silent) {
+        setNotice(caught instanceof Error ? caught.message : "Could not load browser captures.");
+      }
     } finally {
       setIsLoadingCaptures(false);
     }
   }
+
+  useEffect(() => {
+    const initialCheckId = window.setTimeout(() => {
+      void loadBrowserCaptures({ silent: true });
+    }, 0);
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadBrowserCaptures({ silent: true });
+      }
+    }, 5000);
+
+    function handleFocus() {
+      void loadBrowserCaptures({ silent: true });
+    }
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.clearTimeout(initialCheckId);
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
 
   function removeSource(id: string) {
     setSources((current) => current.filter((source) => source.id !== id));
@@ -603,7 +639,7 @@ export default function ResearchWorkspace({ business, businesses, onBusinessAppr
 
         <button
           type="button"
-          onClick={loadBrowserCaptures}
+          onClick={() => void loadBrowserCaptures()}
           disabled={isLoadingCaptures}
           className="min-h-11 border border-cyan-300/40 px-5 text-sm font-medium text-cyan-300 transition hover:bg-cyan-300 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -755,4 +791,9 @@ export default function ResearchWorkspace({ business, businesses, onBusinessAppr
     </section>
   );
 }
+
+
+
+
+
 

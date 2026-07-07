@@ -178,6 +178,38 @@ export async function addEvidenceToPerson(data: {
 
   return evidence;
 }
+export async function findPersonByIdentity(data: {
+  firstName?: string;
+  lastName?: string;
+  linkedinUrl?: string;
+  email?: string;
+}) {
+  const identityMatches = [
+    data.linkedinUrl ? { linkedinUrl: data.linkedinUrl } : undefined,
+    data.email ? { email: data.email } : undefined,
+    data.firstName && data.lastName
+      ? { firstName: data.firstName, lastName: data.lastName }
+      : undefined,
+  ].filter(Boolean) as object[];
+
+  if (!identityMatches.length) return null;
+
+  return prisma.person.findFirst({
+    where: {
+      OR: identityMatches,
+    },
+    include: {
+      employments: {
+        include: {
+          business: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
+    },
+  });
+}
 export async function addPersonToBusiness(data: {
   businessId: string;
   firstName: string;

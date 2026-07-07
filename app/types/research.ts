@@ -51,6 +51,7 @@ export type ResearchProposal = {
     linkedinUrl?: string;
     email?: string;
     notes?: string;
+    connectionStatus?: "connection_requested" | "accepted" | "existing_contact";
   };
   evidenceTitle: string;
   evidenceContent: string;
@@ -60,3 +61,4 @@ export type ResearchAnalysis = {
   summary: string;
   proposals: ResearchProposal[];
 };
+

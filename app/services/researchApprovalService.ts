@@ -3,6 +3,7 @@ import {
   addEvidenceToPerson,
   addPersonToBusiness,
   createBusiness,
+  findPersonByIdentity,
   getBusinessById,
   updateBusiness,
 } from "../repositories/businessRepository";
@@ -141,16 +142,35 @@ export async function approveResearchSource(input: ApprovalInput) {
   let approvedPersonId = "";
 
   if (personFirstName && personLastName) {
-    const approvedPerson = await addPersonToBusiness({
-      businessId,
+    const linkedinUrl = cleanText(proposal.person?.linkedinUrl);
+    const email = cleanText(proposal.person?.email);
+    const existingPerson = await findPersonByIdentity({
       firstName: personFirstName,
       lastName: personLastName,
-      jobTitle: cleanText(proposal.person?.jobTitle),
-      linkedinUrl: cleanText(proposal.person?.linkedinUrl),
-      email: cleanText(proposal.person?.email),
-      notes: cleanText(proposal.person?.notes),
+      linkedinUrl,
+      email,
     });
-    approvedPersonId = approvedPerson.id;
+
+    if (existingPerson) {
+      approvedPersonId = existingPerson.id;
+    } else {
+      const connectionStatus = cleanText(proposal.person?.connectionStatus);
+
+      if (linkedinUrl && connectionStatus !== "accepted") {
+        throw new Error("New LinkedIn people stay pending until you mark their connection as accepted.");
+      }
+
+      const approvedPerson = await addPersonToBusiness({
+        businessId,
+        firstName: personFirstName,
+        lastName: personLastName,
+        jobTitle: cleanText(proposal.person?.jobTitle),
+        linkedinUrl,
+        email,
+        notes: cleanText(proposal.person?.notes),
+      });
+      approvedPersonId = approvedPerson.id;
+    }
   }
 
   const evidenceTitle = cleanText(proposal.evidenceTitle) || source.name;
@@ -181,4 +201,6 @@ export async function approveResearchSource(input: ApprovalInput) {
 
   return business;
 }
+
+
 

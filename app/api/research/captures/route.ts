@@ -53,6 +53,49 @@ export async function OPTIONS() {
   });
 }
 
+function needsAnalysisRepair(payload: CapturePayload) {
+  const person = payload.analysis.proposals[0]?.person;
+
+  return person?.firstName === "Person" && person.lastName === "LinkedIn";
+}
+
+async function captureForResponse(capture: Awaited<ReturnType<typeof prisma.inboxItem.findMany>>[number]) {
+  let payload = JSON.parse(capture.payload) as CapturePayload;
+  let title = capture.title;
+  let summary = capture.summary;
+
+  if (needsAnalysisRepair(payload)) {
+    const analysis = await analyseResearchSourceRequest(payload.source);
+    const firstProposal = analysis.proposals[0];
+
+    payload = {
+      ...payload,
+      analysis,
+    };
+    title = firstProposal?.title || payload.source.name;
+    summary = analysis.summary;
+
+    await prisma.inboxItem.update({
+      where: {
+        id: capture.id,
+      },
+      data: {
+        title,
+        summary,
+        payload: JSON.stringify(payload),
+      },
+    });
+  }
+
+  return {
+    id: capture.id,
+    title,
+    summary,
+    createdAt: capture.createdAt,
+    payload,
+  };
+}
+
 export async function GET() {
   const captures = await prisma.inboxItem.findMany({
     where: {
@@ -64,15 +107,7 @@ export async function GET() {
     },
   });
 
-  return responseJson(
-    captures.map((capture) => ({
-      id: capture.id,
-      title: capture.title,
-      summary: capture.summary,
-      createdAt: capture.createdAt,
-      payload: JSON.parse(capture.payload) as CapturePayload,
-    }))
-  );
+  return responseJson(await Promise.all(captures.map(captureForResponse)));
 }
 
 export async function POST(request: Request) {
@@ -112,3 +147,4 @@ export async function POST(request: Request) {
     );
   }
 }
+
