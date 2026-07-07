@@ -50,8 +50,6 @@ export default function TodayBrief() {
       );
 
       setSelectedBusiness(updatedSelected ?? null);
-    } else {
-      setSelectedBusiness(data[0] ?? null);
     }
   }
 
@@ -105,7 +103,7 @@ export default function TodayBrief() {
       if (cancelled) return;
 
       setBusinesses(data);
-      setSelectedBusiness(data[0] ?? null);
+      setSelectedBusiness(null);
     }
 
     void loadBusinesses();

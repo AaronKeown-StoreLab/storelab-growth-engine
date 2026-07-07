@@ -599,10 +599,15 @@ export default function ResearchWorkspace({ business, businesses, onBusinessAppr
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase text-cyan-300">Research Session</p>
-          <h2 className="mt-2 text-3xl font-bold leading-tight text-white">
-            {business?.name ?? "New relationship"}
+          <p className="text-xs font-medium uppercase text-cyan-300">Research Session</p>
+          <h2 className="mt-1 text-2xl font-semibold leading-tight text-white">
+            {business?.name ?? "New Relationship"}
           </h2>
+          {!business && (
+            <p className="mt-2 text-sm text-gray-500">
+              Nothing selected. Add a source and StoreLab will recommend the right business or person.
+            </p>
+          )}
         </div>
 
         <div className="border border-white/10 bg-black/20 px-4 py-3 text-right">
@@ -806,10 +811,4 @@ export default function ResearchWorkspace({ business, businesses, onBusinessAppr
     </section>
   );
 }
-
-
-
-
-
-
 

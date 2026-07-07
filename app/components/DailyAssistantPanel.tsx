@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Business } from "../types/business";
 
 type AssistantAction = {
@@ -19,6 +19,20 @@ type Props = {
   businesses: Business[];
   onOpenBusiness: (business: Business) => void;
 };
+
+type AssistantPrefs = {
+  hidden: boolean;
+  collapsed: boolean;
+  dismissed: string[];
+};
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function storageKey() {
+  return `storelab-assistant-${todayKey()}`;
+}
 
 function daysSince(value: string) {
   const then = new Date(value).getTime();
@@ -165,9 +179,63 @@ function buildActions(businesses: Business[]) {
     .slice(0, 6);
 }
 
+function loadPrefs(): AssistantPrefs {
+  if (typeof window === "undefined") {
+    return { hidden: false, collapsed: false, dismissed: [] };
+  }
+
+  try {
+    const raw = window.localStorage.getItem(storageKey());
+    if (!raw) return { hidden: false, collapsed: false, dismissed: [] };
+
+    const parsed = JSON.parse(raw) as Partial<AssistantPrefs>;
+
+    return {
+      hidden: Boolean(parsed.hidden),
+      collapsed: Boolean(parsed.collapsed),
+      dismissed: Array.isArray(parsed.dismissed) ? parsed.dismissed : [],
+    };
+  } catch {
+    return { hidden: false, collapsed: false, dismissed: [] };
+  }
+}
+
+function actionButtonClass(tone: "primary" | "quiet" = "quiet") {
+  return tone === "primary"
+    ? "min-h-9 border border-cyan-300/70 px-3 text-xs font-medium text-cyan-200 transition hover:bg-cyan-300 hover:text-black"
+    : "min-h-9 border border-white/10 px-3 text-xs text-gray-400 transition hover:border-white/25 hover:text-white";
+}
+
 export default function DailyAssistantPanel({ businesses, onOpenBusiness }: Props) {
   const actions = useMemo(() => buildActions(businesses), [businesses]);
   const [draftIndexes, setDraftIndexes] = useState<Record<string, number>>({});
+  const [hidden, setHidden] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [dismissedIds, setDismissedIds] = useState<string[]>([]);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      const prefs = loadPrefs();
+      setHidden(prefs.hidden);
+      setCollapsed(prefs.collapsed);
+      setDismissedIds(prefs.dismissed);
+      setPrefsLoaded(true);
+    }, 0);
+
+    return () => window.clearTimeout(timerId);
+  }, []);
+
+  useEffect(() => {
+    if (!prefsLoaded) return;
+
+    const prefs: AssistantPrefs = { hidden, collapsed, dismissed: dismissedIds };
+    window.localStorage.setItem(storageKey(), JSON.stringify(prefs));
+  }, [hidden, collapsed, dismissedIds, prefsLoaded]);
+
+  const activeActions = actions.filter((action) => !dismissedIds.includes(action.id));
+  const primaryAction = activeActions[0];
+  const secondaryActions = activeActions.slice(1, 4);
 
   function currentDraft(action: AssistantAction) {
     const index = draftIndexes[action.id] ?? 0;
@@ -182,88 +250,165 @@ export default function DailyAssistantPanel({ businesses, onOpenBusiness }: Prop
     }));
   }
 
-  if (!actions.length) {
+  function dismiss(action: AssistantAction) {
+    setDismissedIds((current) => Array.from(new Set([...current, action.id])));
+  }
+
+  if (hidden) {
     return (
-      <section className="border border-white/10 bg-white/[0.02] p-5">
-        <p className="text-xs uppercase text-cyan-300">Today&apos;s Assistant</p>
-        <h2 className="mt-2 text-2xl font-semibold text-white">Nothing urgent yet</h2>
-        <p className="mt-2 text-sm text-gray-500">
-          Add conversations, opportunities, LinkedIn captures, and email/calendar signals here. StoreLab OS will turn them into daily actions.
-        </p>
+      <section className="border border-white/10 bg-white/[0.02] px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-gray-300">Today&apos;s Assistant hidden</p>
+          <button
+            type="button"
+            onClick={() => setHidden(false)}
+            className={actionButtonClass("primary")}
+          >
+            Show
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  if (!activeActions.length) {
+    return (
+      <section className="border border-white/10 bg-white/[0.02] p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium uppercase text-cyan-300">Today&apos;s Assistant</p>
+            <h2 className="mt-1 text-xl font-semibold text-white">Nothing urgent</h2>
+            <p className="mt-1 text-sm leading-relaxed text-gray-500">
+              Captures, conversations, email, calendar, and LinkedIn signals will become daily suggestions here.
+            </p>
+          </div>
+          {dismissedIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setDismissedIds([])}
+              className={actionButtonClass()}
+            >
+              Restore today
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  if (collapsed && primaryAction) {
+    return (
+      <section className="border border-cyan-300/20 bg-cyan-300/5 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase text-cyan-300">Today&apos;s Assistant</p>
+            <p className="mt-1 truncate text-sm text-gray-300">
+              {activeActions.length} move{activeActions.length === 1 ? "" : "s"}: {primaryAction.title}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => onOpenBusiness(primaryAction.business)} className={actionButtonClass()}>
+              Open
+            </button>
+            <button type="button" onClick={() => setCollapsed(false)} className={actionButtonClass("primary")}>
+              Expand
+            </button>
+            <button type="button" onClick={() => setHidden(true)} className={actionButtonClass()}>
+              Close
+            </button>
+          </div>
+        </div>
       </section>
     );
   }
 
   return (
-    <section className="border border-cyan-300/20 bg-cyan-300/5 p-5">
+    <section className="border border-cyan-300/20 bg-cyan-300/5 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs uppercase text-cyan-300">Today&apos;s Assistant</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">
-            {actions.length} relationship move{actions.length === 1 ? "" : "s"}
+          <p className="text-xs font-medium uppercase text-cyan-300">Today&apos;s Assistant</p>
+          <h2 className="mt-1 text-xl font-semibold text-white">
+            {activeActions.length} relationship move{activeActions.length === 1 ? "" : "s"}
           </h2>
         </div>
-        <p className="border border-white/10 px-3 py-2 text-xs text-gray-400">
-          Drafts ready
-        </p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setCollapsed(true)} className={actionButtonClass()}>
+            Minimise
+          </button>
+          <button type="button" onClick={() => setHidden(true)} className={actionButtonClass()}>
+            Close
+          </button>
+        </div>
       </div>
 
-      <div className="mt-5 space-y-4">
-        {actions.map((action) => (
-          <article key={action.id} className="border border-white/10 bg-black/20 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="border border-cyan-300/30 px-2 py-1 text-xs text-cyan-200">
-                    {action.type}
-                  </span>
-                  <span className="border border-white/10 px-2 py-1 text-xs text-gray-500">
-                    {action.priority}
-                  </span>
-                </div>
-                <h3 className="mt-3 text-base font-semibold text-white">
-                  {action.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-gray-500">
-                  {action.reason}
-                </p>
+      {primaryAction && (
+        <article className="mt-4 border border-white/10 bg-black/20 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="border border-cyan-300/30 px-2 py-1 text-xs text-cyan-200">
+                  {primaryAction.type}
+                </span>
+                <span className="border border-white/10 px-2 py-1 text-xs text-gray-500">
+                  {primaryAction.priority}
+                </span>
               </div>
-
-              <button
-                type="button"
-                onClick={() => onOpenBusiness(action.business)}
-                className="border border-white/10 px-3 py-2 text-xs text-gray-300 hover:border-cyan-300/50 hover:text-cyan-300"
-              >
-                Open
-              </button>
+              <h3 className="mt-3 text-base font-semibold text-white">{primaryAction.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-gray-500">{primaryAction.reason}</p>
             </div>
 
-            <div className="mt-4 border-l border-cyan-300/40 bg-black/20 p-3">
-              <p className="text-xs uppercase text-gray-600">Suggested reply</p>
-              <p className="mt-2 text-sm leading-relaxed text-gray-200">
-                {currentDraft(action)}
-              </p>
-            </div>
+            <button type="button" onClick={() => onOpenBusiness(primaryAction.business)} className={actionButtonClass()}>
+              Open
+            </button>
+          </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => regenerate(action)}
-                className="border border-white/10 px-3 py-2 text-xs text-gray-300 hover:border-cyan-300/50 hover:text-cyan-300"
-              >
-                Regenerate
-              </button>
-              <button
-                type="button"
-                onClick={() => void navigator.clipboard?.writeText(currentDraft(action))}
-                className="border border-white/10 px-3 py-2 text-xs text-gray-300 hover:border-cyan-300/50 hover:text-cyan-300"
-              >
-                Copy
-              </button>
+          <div className="mt-4 border-l border-cyan-300/40 bg-black/20 p-3">
+            <p className="text-xs font-medium uppercase text-gray-600">Suggested reply</p>
+            <p className="mt-2 text-sm leading-relaxed text-gray-200">{currentDraft(primaryAction)}</p>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={() => regenerate(primaryAction)} className={actionButtonClass()}>
+              Regenerate
+            </button>
+            <button
+              type="button"
+              onClick={() => void navigator.clipboard?.writeText(currentDraft(primaryAction))}
+              className={actionButtonClass()}
+            >
+              Copy
+            </button>
+            <button type="button" onClick={() => dismiss(primaryAction)} className={actionButtonClass("primary")}>
+              Complete
+            </button>
+            <button type="button" onClick={() => dismiss(primaryAction)} className={actionButtonClass()}>
+              Ignore
+            </button>
+          </div>
+        </article>
+      )}
+
+      {secondaryActions.length > 0 && (
+        <div className="mt-3 divide-y divide-white/10 border border-white/10 bg-black/10">
+          {secondaryActions.map((action) => (
+            <div key={action.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-gray-200">{action.title}</p>
+                <p className="mt-1 text-xs text-gray-600">{action.type} - {action.priority}</p>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => onOpenBusiness(action.business)} className="text-xs text-gray-400 hover:text-cyan-300">
+                  Open
+                </button>
+                <button type="button" onClick={() => dismiss(action)} className="text-xs text-gray-500 hover:text-white">
+                  Ignore
+                </button>
+              </div>
             </div>
-          </article>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
+
