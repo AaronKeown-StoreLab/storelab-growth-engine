@@ -3,6 +3,8 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --font-geist-sans: Arial, Helvetica, sans-serif;
+  --font-geist-mono: "Courier New", "Lucida Console", monospace;
 }
 
 @theme inline {
@@ -22,9 +24,10 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans);
 }
-/* StoreLab OS — Sprint 10 corner purge */
+
+/* StoreLab OS - Sprint 10 corner purge */
 .rounded-\[2\.5rem\],
 .rounded-\[2rem\],
 .rounded-3xl,
@@ -38,21 +41,13 @@ body {
 .rounded-full {
   border-radius: 9999px;
 }
-.no-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
 
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
 /* Hide scrollbars while keeping scrolling */
-
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

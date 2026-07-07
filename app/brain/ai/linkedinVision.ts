@@ -1,4 +1,5 @@
-import { openai } from "./openai";
+import type { ResponseInputMessageContentList } from "openai/resources/responses/responses";
+import { getOpenAIClient } from "./openai";
 
 type ScreenshotInput = {
   base64: string;
@@ -9,7 +10,7 @@ type ScreenshotInput = {
 export async function analyseLinkedInProspect(
   screenshots: ScreenshotInput[]
 ) {
-  const content: any[] = [
+  const content: ResponseInputMessageContentList = [
     {
       type: "input_text",
       text: `
@@ -81,7 +82,7 @@ Rules:
     });
   }
 
-  const response = await openai.responses.create({
+  const response = await getOpenAIClient().responses.create({
     model: "gpt-4.1-mini",
     input: [
       {

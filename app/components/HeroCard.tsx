@@ -30,7 +30,7 @@ export default function HeroCard({
 
       <div className="mt-12">
         <p className="text-gray-500 uppercase tracking-widest text-xs">
-          Today's Focus
+          Today&apos;s Focus
         </p>
 
         <h3 className="text-3xl font-semibold mt-3">
