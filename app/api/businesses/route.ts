@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { loadBusinesses } from "../../services/businessService";
+import {
+  createBusinessWorkspace,
+  loadBusinesses,
+} from "../../services/businessService";
 
 export async function GET() {
   try {
@@ -15,6 +18,27 @@ export async function GET() {
       },
       {
         status: 500,
+      }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const business = await createBusinessWorkspace(body);
+
+    return NextResponse.json(business, { status: 201 });
+  } catch (error) {
+    console.error(error);
+
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Could not create business.",
+      },
+      {
+        status: 400,
       }
     );
   }

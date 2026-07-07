@@ -2,6 +2,7 @@ export type Business = {
   id: string;
   name: string;
   industry?: string | null;
+  website?: string | null;
   country?: string | null;
   summary?: string | null;
 

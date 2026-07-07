@@ -1,5 +1,44 @@
 import { prisma } from "../lib/prisma";
 
+const businessInclude = {
+  employments: {
+    where: {
+      isCurrent: true,
+    },
+    include: {
+      person: true,
+    },
+    orderBy: {
+      createdAt: "asc" as const,
+    },
+  },
+  opportunities: {
+    orderBy: {
+      createdAt: "desc" as const,
+    },
+  },
+  inboxItems: {
+    orderBy: {
+      createdAt: "desc" as const,
+    },
+  },
+  notebookEntries: {
+    orderBy: {
+      createdAt: "desc" as const,
+    },
+  },
+  interactions: {
+    orderBy: {
+      occurredAt: "desc" as const,
+    },
+  },
+  timeline: {
+    orderBy: {
+      occurredAt: "desc" as const,
+    },
+  },
+};
+
 export async function getBusinesses() {
   return prisma.business.findMany({
     where: {
@@ -10,44 +49,28 @@ export async function getBusinesses() {
     orderBy: {
       name: "asc",
     },
-    include: {
-      employments: {
-        where: {
-          isCurrent: true,
-        },
-        include: {
-          person: true,
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-      opportunities: {
-        orderBy: {
-          createdAt: "desc",
-        },
-      },
-      inboxItems: {
-        orderBy: {
-          createdAt: "desc",
-        },
-      },
-      notebookEntries: {
-        orderBy: {
-          createdAt: "desc",
-        },
-      },
-      interactions: {
-        orderBy: {
-          occurredAt: "desc",
-        },
-      },
+    include: businessInclude,
+  });
+}
+
+export async function createBusiness(data: {
+  name: string;
+  website?: string;
+  summary?: string;
+}) {
+  return prisma.business.create({
+    data: {
+      name: data.name,
+      website: data.website || null,
+      summary: data.summary || null,
       timeline: {
-        orderBy: {
-          occurredAt: "desc",
+        create: {
+          eventType: "business_added",
+          summary: "Business added to StoreLab OS.",
         },
       },
     },
+    include: businessInclude,
   });
 }
 

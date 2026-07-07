@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import InboxPanel from "./InboxPanel";
 import QuickQuestion from "./QuickQuestion";
 import ResearchWorkspace from "./ResearchWorkspace";
+import AddBusinessPanel from "./AddBusinessPanel";
 import BusinessCard from "./BusinessCard";
 import BusinessWorkspace from "./BusinessWorkspace";
 import { useOneThing } from "../../hooks/useOneThing";
@@ -15,6 +16,14 @@ export default function TodayBrief() {
   const [businessSearch, setBusinessSearch] = useState("");
 
   const { currentPrompt, answerCurrent, askLater, hasPrompt } = useOneThing();
+
+  function handleBusinessCreated(business: Business) {
+    setBusinesses((current) =>
+      [...current, business].sort((a, b) => a.name.localeCompare(b.name))
+    );
+    setSelectedBusiness(business);
+    setBusinessSearch("");
+  }
 
   async function refreshBusinesses() {
     const response = await fetch("/api/businesses");
@@ -62,6 +71,7 @@ export default function TodayBrief() {
         business.industry,
         business.country,
         business.summary,
+        business.website,
         people,
         opportunities,
       ]
@@ -114,17 +124,23 @@ export default function TodayBrief() {
           <ResearchWorkspace businessName={selectedBusiness?.name} />
 
           <div className="sticky top-0 z-10 border border-white/10 bg-[#05080D]/95 p-4 backdrop-blur">
-            <input
-              value={businessSearch}
-              onChange={(event) => setBusinessSearch(event.target.value)}
-              placeholder="Search businesses, people, opportunities..."
-              className="w-full bg-transparent text-lg text-white outline-none placeholder:text-gray-600"
-            />
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
+              <div className="min-w-0 flex-1">
+                <input
+                  value={businessSearch}
+                  onChange={(event) => setBusinessSearch(event.target.value)}
+                  placeholder="Search businesses, people, opportunities..."
+                  className="w-full bg-transparent text-lg text-white outline-none placeholder:text-gray-600"
+                />
 
-            <p className="mt-2 text-xs text-gray-600">
-              {filteredBusinesses.length} business
-              {filteredBusinesses.length === 1 ? "" : "es"} shown
-            </p>
+                <p className="mt-2 text-xs text-gray-600">
+                  {filteredBusinesses.length} business
+                  {filteredBusinesses.length === 1 ? "" : "es"} shown
+                </p>
+              </div>
+
+              <AddBusinessPanel onCreated={handleBusinessCreated} />
+            </div>
           </div>
 
           {filteredBusinesses.length ? (
