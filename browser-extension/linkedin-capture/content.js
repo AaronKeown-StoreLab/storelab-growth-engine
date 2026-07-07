@@ -7,6 +7,15 @@ if (!window.__STORELAB_LINKEDIN_CAPTURE_READY__) {
       .trim();
   }
 
+  function readableText(value) {
+    return String(value || "")
+      .replace(/\u00a0/g, " ")
+      .split(/\r?\n/g)
+      .map((line) => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+
   function textFrom(selector) {
     const element = document.querySelector(selector);
     return cleanText(element?.innerText || element?.textContent || "");
@@ -25,10 +34,22 @@ if (!window.__STORELAB_LINKEDIN_CAPTURE_READY__) {
   function visibleProfileText() {
     const main = document.querySelector("main") || document.body;
     const sections = Array.from(main.querySelectorAll("section, header"))
-      .map((element) => cleanText(element.innerText || element.textContent || ""))
+      .map((element) => readableText(element.innerText || element.textContent || ""))
       .filter((value) => value.length > 12);
 
     return uniqueLines(sections).join("\n").slice(0, 22000);
+  }
+
+  function sectionTextByHeading(heading) {
+    const main = document.querySelector("main") || document.body;
+    const lowerHeading = heading.toLowerCase();
+
+    return Array.from(main.querySelectorAll("section"))
+      .map((element) => readableText(element.innerText || element.textContent || ""))
+      .find((value) => {
+        const firstLine = value.split("\n")[0]?.toLowerCase() || "";
+        return firstLine === lowerHeading || value.toLowerCase().startsWith(`${lowerHeading}\n`);
+      }) || "";
   }
 
   function captureProfile() {
@@ -45,6 +66,7 @@ if (!window.__STORELAB_LINKEDIN_CAPTURE_READY__) {
       ...linesFrom('button[aria-label*="Current company"]'),
     ]).slice(0, 6);
     const educationHints = uniqueLines(linesFrom('a[href*="/school/"]')).slice(0, 4);
+    const experience = sectionTextByHeading("Experience");
     const content = [
       `Person LinkedIn URL: ${window.location.href}`,
       `Profile name: ${name}`,
@@ -52,6 +74,7 @@ if (!window.__STORELAB_LINKEDIN_CAPTURE_READY__) {
       location ? `Location: ${location}` : "",
       companyHints.length ? `Company clues: ${companyHints.join(" | ")}` : "",
       educationHints.length ? `Education clues: ${educationHints.join(" | ")}` : "",
+      experience ? `Experience section:\n${experience}` : "",
       "Visible LinkedIn page text:",
       visibleProfileText(),
     ]
@@ -64,6 +87,7 @@ if (!window.__STORELAB_LINKEDIN_CAPTURE_READY__) {
       headline,
       location,
       companyHints,
+      experience,
       content,
       capturedAt: new Date().toISOString(),
     };
@@ -76,3 +100,4 @@ if (!window.__STORELAB_LINKEDIN_CAPTURE_READY__) {
     return true;
   });
 }
+

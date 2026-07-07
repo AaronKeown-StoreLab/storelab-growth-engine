@@ -18,6 +18,7 @@ type ExtractedPerson = {
   jobTitle?: string;
   employerName?: string;
   country?: string;
+  previousEmployments?: string[];
 };
 
 function cleanJsonResult(result: string) {
@@ -117,6 +118,13 @@ function lineValue(content: string, label: string) {
   return line?.slice(label.length + 1).trim() ?? "";
 }
 
+function contentLines(content: string) {
+  return content
+    .split(/\r?\n|`n/g)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
 const countryNames = [
   "Australia",
   "Malaysia",
@@ -162,6 +170,94 @@ function countryFromContent(content?: string) {
 
   return countryFromLocation(lineValue(content, "Location"));
 }
+const experienceEndHeadings = [
+  "About",
+  "Activity",
+  "Education",
+  "Licenses",
+  "Skills",
+  "Recommendations",
+  "Interests",
+  "More profiles for you",
+  "People you may know",
+  "Contact info",
+  "Highlights",
+];
+
+function experienceSectionLines(content: string) {
+  const lines = contentLines(content);
+  const startIndex = lines.findIndex((line) => {
+    const lower = line.toLowerCase();
+
+    return lower === "experience" || lower === "experience section:";
+  });
+
+  if (startIndex < 0) return [];
+
+  const result: string[] = [];
+
+  for (const line of lines.slice(startIndex + 1)) {
+    if (experienceEndHeadings.some((heading) => line.toLowerCase() === heading.toLowerCase())) {
+      break;
+    }
+
+    if (/^(show all|show more|experience)$/i.test(line)) continue;
+    result.push(line);
+  }
+
+  return result;
+}
+
+function isDateOrDurationLine(value: string) {
+  return /\b(present|jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|yrs?|years?|mos?|months?|[12][0-9]{3})\b/i.test(
+    value
+  );
+}
+
+function isLikelyLocationLine(value: string) {
+  return (
+    /\b(area|region|city|county|greater|metro|remote|hybrid|onsite)\b/i.test(value) ||
+    Boolean(countryFromLocation(value))
+  );
+}
+
+function cleanExperienceBusiness(value: string) {
+  return value
+    .replace(/\s+(full-time|part-time|contract|self-employed|freelance|internship)\b.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function currentExperienceFromContent(content: string) {
+  const lines = experienceSectionLines(content).filter((line) => !isDateOrDurationLine(line));
+
+  if (lines.length < 2) return null;
+
+  return {
+    role: cleanExtractedRole(lines[0]) || "",
+    business: cleanExperienceBusiness(lines[1]),
+    country: countryFromLocation(lines[1]) || countryFromContent(content),
+  };
+}
+
+function previousExperienceSummaryFromContent(content: string) {
+  const lines = experienceSectionLines(content);
+  const currentDateIndex = lines.findIndex((line, index) => index > 1 && isDateOrDurationLine(line));
+  const previousLines = lines.slice(currentDateIndex >= 0 ? currentDateIndex + 1 : 2);
+  const previousEmployer = previousLines.find(
+    (line) => !isDateOrDurationLine(line) && !isLikelyLocationLine(line)
+  );
+
+  if (!previousEmployer) return [];
+
+  const employerIndex = previousLines.indexOf(previousEmployer);
+  const roles = previousLines
+    .slice(employerIndex + 1)
+    .filter((line) => !isDateOrDurationLine(line) && !isLikelyLocationLine(line))
+    .slice(0, 4);
+
+  return [`${previousEmployer}${roles.length ? `: ${roles.join(", ")}` : ""}`];
+}
 
 function businessNameWithCountry(employerName: string, country: string) {
   if (!country) return employerName;
@@ -178,6 +274,8 @@ function personFromProfileLabels(content: string): ExtractedPerson | null {
   const profileName = lineValue(content, "Profile name");
   const headline = lineValue(content, "Headline");
   const country = countryFromContent(content);
+  const currentExperience = currentExperienceFromContent(content);
+  const previousEmployments = previousExperienceSummaryFromContent(content);
 
   if (!profileName) return null;
 
@@ -189,9 +287,14 @@ function personFromProfileLabels(content: string): ExtractedPerson | null {
   return {
     firstName: nameParts[0],
     lastName: nameParts.slice(1).join(" "),
-    jobTitle: headlineMatch ? cleanExtractedRole(headlineMatch[1]) || undefined : undefined,
-    employerName: headlineMatch ? cleanExtractedEmployer(headlineMatch[2]) || undefined : undefined,
-    country: country || undefined,
+    jobTitle:
+      currentExperience?.role ||
+      (headlineMatch ? cleanExtractedRole(headlineMatch[1]) || undefined : undefined),
+    employerName:
+      currentExperience?.business ||
+      (headlineMatch ? cleanExtractedEmployer(headlineMatch[2]) || undefined : undefined),
+    country: currentExperience?.country || country || undefined,
+    previousEmployments: previousEmployments.length ? previousEmployments : undefined,
   };
 }
 
@@ -290,13 +393,16 @@ function proposalPerson(source: ResearchSourceForAnalysis, person?: ExtractedPer
   if (!person) return undefined;
 
   const linkedinUrl = linkedinUrlFromDetail(source.detail);
+  const previousEmploymentNote = person.previousEmployments?.length
+    ? ` Previous LinkedIn experience: ${person.previousEmployments.join("; ")}.`
+    : "";
 
   return {
     firstName: person.firstName,
     lastName: person.lastName,
     jobTitle: person.jobTitle,
     linkedinUrl,
-    notes: `Captured from ${source.name}.`,
+    notes: `Captured from ${source.name}.${previousEmploymentNote}`,
     connectionStatus: linkedinUrl ? "connection_requested" as const : undefined,
   };
 }
@@ -450,6 +556,7 @@ Rules:
 - Prefer the employer shown in the source over the currently selected business. Never attach a person to the selected business if the source shows a different employer.
 - Prefer existing business matches over creating duplicates. Match by business name, brand, website domain, employer, and source content.
 - If a LinkedIn profile shows a person and employer, put the person in person and the employer/business in business matching fields. Never put a person LinkedIn URL in businessUpdates.website.
+- Read the LinkedIn Experience section when visible. The first experience item is current employment: role on the first line, business on the second line. Previous employers and roles belong in person notes/evidence, not as the current business.
 - Use the LinkedIn location as country context for the business. Example: a person at Mars Wrigley with Location: Malaysia should create or match Mars Wrigley Malaysia, not generic Mars or Mars Australia.
 - If a LinkedIn URL alone does not expose employer/profile text, return needs_more_context instead of guessing or attaching to the selected business.
 - For screenshots/images, read visible LinkedIn profile text, including name, headline, current employer, location, education, and visible mutuals.
@@ -525,6 +632,9 @@ Rules:
     return fallback;
   }
 }
+
+
+
 
 
 
