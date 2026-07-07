@@ -17,6 +17,7 @@ type ExtractedPerson = {
   lastName: string;
   jobTitle?: string;
   employerName?: string;
+  country?: string;
 };
 
 function cleanJsonResult(result: string) {
@@ -116,9 +117,67 @@ function lineValue(content: string, label: string) {
   return line?.slice(label.length + 1).trim() ?? "";
 }
 
+const countryNames = [
+  "Australia",
+  "Malaysia",
+  "Singapore",
+  "New Zealand",
+  "United States",
+  "United Kingdom",
+  "India",
+  "Indonesia",
+  "Thailand",
+  "Vietnam",
+  "Philippines",
+  "Japan",
+  "China",
+  "Hong Kong",
+  "South Korea",
+  "Canada",
+];
+
+const locationCountryAliases: Array<[RegExp, string]> = [
+  [/\b(greater sydney|sydney|melbourne|brisbane|perth|adelaide|victoria|nsw|queensland|australia)\b/i, "Australia"],
+  [/\b(kuala lumpur|selangor|malaysia)\b/i, "Malaysia"],
+  [/\b(auckland|wellington|christchurch|new zealand)\b/i, "New Zealand"],
+  [/\b(singapore)\b/i, "Singapore"],
+];
+
+function countryFromLocation(value: string) {
+  const cleaned = value.replace(/\s+/g, " ").trim();
+
+  if (!cleaned) return "";
+
+  const explicitCountry = countryNames.find((country) =>
+    new RegExp(`\\b${country.replace(/ /g, "\\s+")}\\b`, "i").test(cleaned)
+  );
+
+  if (explicitCountry) return explicitCountry;
+
+  return locationCountryAliases.find(([pattern]) => pattern.test(cleaned))?.[1] ?? "";
+}
+
+function countryFromContent(content?: string) {
+  if (!content) return "";
+
+  return countryFromLocation(lineValue(content, "Location"));
+}
+
+function businessNameWithCountry(employerName: string, country: string) {
+  if (!country) return employerName;
+
+  const normalisedEmployer = normaliseName(employerName);
+  const normalisedCountry = normaliseName(country);
+
+  return normalisedEmployer.includes(normalisedCountry)
+    ? employerName
+    : `${employerName} ${country}`;
+}
+
 function personFromProfileLabels(content: string): ExtractedPerson | null {
   const profileName = lineValue(content, "Profile name");
   const headline = lineValue(content, "Headline");
+  const country = countryFromContent(content);
 
   if (!profileName) return null;
 
@@ -132,6 +191,7 @@ function personFromProfileLabels(content: string): ExtractedPerson | null {
     lastName: nameParts.slice(1).join(" "),
     jobTitle: headlineMatch ? cleanExtractedRole(headlineMatch[1]) || undefined : undefined,
     employerName: headlineMatch ? cleanExtractedEmployer(headlineMatch[2]) || undefined : undefined,
+    country: country || undefined,
   };
 }
 
@@ -169,6 +229,7 @@ function nameFromSourceContent(content?: string): ExtractedPerson | null {
     lastName: `${match[2].charAt(0).toUpperCase()}${match[2].slice(1)}`,
     jobTitle: jobTitle || undefined,
     employerName: employerName || undefined,
+    country: countryFromContent(content) || undefined,
   };
 }
 
@@ -221,7 +282,7 @@ function findBusinessMatch(source: ResearchSourceForAnalysis, businesses: Resear
     if (!platformSource && websiteHost && host && websiteHost === host) return true;
     if (business.name && haystack.includes(business.name.toLowerCase())) return true;
 
-    return businessWords.some((word) => haystack.includes(word));
+    return businessWords.length > 1 && businessWords.every((word) => haystack.includes(word));
   });
 }
 
@@ -259,11 +320,18 @@ function fallbackAnalysis(input: Input): ResearchAnalysis {
   const sourcePerson =
     nameFromSourceContent(input.source.content) ?? nameFromLinkedInUrl(input.source.detail);
   const employerName = sourcePerson?.employerName ?? employerFromContent(input.source.content);
-  const employerMatch = employerName ? findBusinessByName(employerName, input.businesses) : undefined;
-  const match = employerMatch ?? findBusinessMatch(input.source, input.businesses);
+  const country = sourcePerson?.country ?? countryFromContent(input.source.content);
+  const employerBusinessName = employerName
+    ? businessNameWithCountry(employerName, country)
+    : "";
+  const employerMatch = employerName
+    ? findBusinessByName(employerBusinessName, input.businesses) ||
+      (!country ? findBusinessByName(employerName, input.businesses) : undefined)
+    : undefined;
+  const match = employerName ? employerMatch : findBusinessMatch(input.source, input.businesses);
   const host = hostFromDetail(input.source.detail);
   const platformSource = isPlatformSource(input.source.detail);
-  const inferredName = employerName || (host ? titleFromHost(host) : input.source.name);
+  const inferredName = employerBusinessName || employerName || (host ? titleFromHost(host) : input.source.name);
   const person = proposalPerson(input.source, sourcePerson);
 
   if (!match && platformSource && !employerName) {
@@ -296,11 +364,12 @@ function fallbackAnalysis(input: Input): ResearchAnalysis {
           ? `Create ${inferredName} and add ${person.firstName} ${person.lastName}`
           : `Create ${inferredName}`,
         description: employerName
-          ? `Detected ${employerName} as the employer. Approve to create the business and attach the person/source.`
+          ? `Detected ${employerName}${country ? ` in ${country}` : ""} as the employer. Approve to create the business and attach the person/source.`
           : "No existing business match was found. Approve to create a new business workspace from this source.",
         businessUpdates: {
           name: inferredName,
           website: !platformSource && input.source.kind === "Website" ? input.source.detail : undefined,
+          country: country || undefined,
           summary: `Created from approved research source: ${input.source.name}.`,
         },
         person,
@@ -381,6 +450,7 @@ Rules:
 - Prefer the employer shown in the source over the currently selected business. Never attach a person to the selected business if the source shows a different employer.
 - Prefer existing business matches over creating duplicates. Match by business name, brand, website domain, employer, and source content.
 - If a LinkedIn profile shows a person and employer, put the person in person and the employer/business in business matching fields. Never put a person LinkedIn URL in businessUpdates.website.
+- Use the LinkedIn location as country context for the business. Example: a person at Mars Wrigley with Location: Malaysia should create or match Mars Wrigley Malaysia, not generic Mars or Mars Australia.
 - If a LinkedIn URL alone does not expose employer/profile text, return needs_more_context instead of guessing or attaching to the selected business.
 - For screenshots/images, read visible LinkedIn profile text, including name, headline, current employer, location, education, and visible mutuals.
 - Keep confidence honest: low, medium, high.
@@ -455,6 +525,13 @@ Rules:
     return fallback;
   }
 }
+
+
+
+
+
+
+
 
 
 
