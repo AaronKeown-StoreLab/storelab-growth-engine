@@ -25,6 +25,9 @@ export type Business = {
       id: string;
       firstName: string;
       lastName: string;
+      linkedinUrl?: string | null;
+      email?: string | null;
+      phone?: string | null;
       notes?: string | null;
     };
   }[];

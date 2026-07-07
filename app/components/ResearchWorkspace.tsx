@@ -27,6 +27,8 @@ type ResearchSource = {
   capturedAt: string;
   detected: string[];
   content?: string;
+  imageDataUrl?: string;
+  mimeType?: string;
 };
 
 type PendingProposal = ResearchProposal & {
@@ -88,7 +90,7 @@ function detectedFor(kind: ResearchSourceKind) {
   if (kind === "Website") return ["URL captured", "Website read queued"];
   if (kind === "Notes") return ["Text captured", "Brain review queued"];
   if (kind === "PDF") return ["Document captured", "Text extraction queued"];
-  if (kind === "Image") return ["Image captured", "OCR queued"];
+  if (kind === "Image") return ["Image captured", "Vision read queued"];
   if (kind === "Presentation") return ["Slides captured", "Text extraction queued"];
   if (kind === "Spreadsheet") return ["Spreadsheet captured", "Table scan queued"];
   if (kind === "Audio") return ["Audio captured", "Transcript queued"];
@@ -97,9 +99,37 @@ function detectedFor(kind: ResearchSourceKind) {
   return common;
 }
 
-function sourceFromFile(file: File, origin: SourceOrigin): ResearchSource {
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function readFileAsText(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
+}
+
+function canReadTextFile(file: File) {
+  const extension = getExtension(file.name);
+
+  return file.type.startsWith("text/") || ["txt", "md", "csv"].includes(extension);
+}
+
+async function sourceFromFile(file: File, origin: SourceOrigin): Promise<ResearchSource> {
   const kind = detectFileKind(file);
   const fallbackName = kind === "Image" ? "Clipboard image" : "Untitled file";
+  const imageDataUrl = kind === "Image" ? await readFileAsDataUrl(file) : undefined;
+  const content = canReadTextFile(file) ? await readFileAsText(file) : undefined;
 
   return {
     id: makeId(),
@@ -114,6 +144,9 @@ function sourceFromFile(file: File, origin: SourceOrigin): ResearchSource {
       minute: "2-digit",
     }),
     detected: detectedFor(kind),
+    content,
+    imageDataUrl,
+    mimeType: file.type || undefined,
   };
 }
 
@@ -263,8 +296,12 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
     nextSources.forEach((source) => void analyseSource(source));
   }
 
-  function addFiles(files: FileList | File[], origin: SourceOrigin) {
-    addSources(Array.from(files).map((file) => sourceFromFile(file, origin)));
+  async function addFiles(files: FileList | File[], origin: SourceOrigin) {
+    const nextSources = await Promise.all(
+      Array.from(files).map((file) => sourceFromFile(file, origin))
+    );
+
+    addSources(nextSources);
   }
 
   function addText(value: string, origin: SourceOrigin) {
@@ -354,7 +391,7 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
 
     if (files.length) {
       event.preventDefault();
-      addFiles(files, "clipboard");
+      void addFiles(files, "clipboard");
       return;
     }
 
@@ -373,7 +410,7 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
     const text = event.dataTransfer.getData("text/plain");
 
     if (files.length) {
-      addFiles(files, "drop");
+      void addFiles(files, "drop");
       return;
     }
 
@@ -382,7 +419,7 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     if (event.target.files?.length) {
-      addFiles(event.target.files, "file");
+      void addFiles(event.target.files, "file");
       event.target.value = "";
     }
   }
@@ -587,6 +624,11 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-gray-500">{proposal.description}</p>
+                    {proposal.action === "needs_more_context" && (
+                      <p className="mt-2 text-xs text-amber-200">
+                        Add profile text, a screenshot, or use the browser extension capture when available.
+                      </p>
+                    )}
                     {proposal.person?.firstName && proposal.person.lastName && (
                       <p className="mt-2 text-xs text-cyan-200">
                         Customer: {proposal.person.firstName} {proposal.person.lastName}
@@ -598,10 +640,10 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
                   <button
                     type="button"
                     onClick={() => approveProposal(proposal)}
-                    disabled={Boolean(workingProposalId)}
+                    disabled={Boolean(workingProposalId) || proposal.action === "needs_more_context"}
                     className="min-h-10 border border-cyan-300 px-4 text-sm font-medium text-cyan-300 transition hover:bg-cyan-300 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {workingProposalId === proposal.id ? "Approving..." : "Approve"}
+                    {proposal.action === "needs_more_context" ? "Needs Source" : workingProposalId === proposal.id ? "Approving..." : "Approve"}
                   </button>
                 </div>
               </div>

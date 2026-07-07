@@ -1,21 +1,25 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 
+function cleanText(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ personId: string }> }
 ) {
   try {
     const { personId } = await context.params;
-
     const body = await request.json();
 
-    const newBusinessId = String(body.businessId || "").trim();
-    const jobTitle = String(body.jobTitle || "").trim();
+    const requestedBusinessId = cleanText(body.businessId);
+    const newBusinessName = cleanText(body.newBusinessName);
+    const jobTitle = cleanText(body.jobTitle);
 
-    if (!newBusinessId) {
+    if (!requestedBusinessId && !newBusinessName) {
       return NextResponse.json(
-        { error: "Business is required." },
+        { error: "Choose or create a business." },
         { status: 400 }
       );
     }
@@ -24,6 +28,10 @@ export async function POST(
       where: {
         personId,
         isCurrent: true,
+      },
+      include: {
+        person: true,
+        business: true,
       },
     });
 
@@ -34,14 +42,45 @@ export async function POST(
       );
     }
 
-    if (currentEmployment.businessId === newBusinessId) {
-      return NextResponse.json(
-        { error: "Person already works for this business." },
-        { status: 400 }
-      );
-    }
-
     await prisma.$transaction(async (tx) => {
+      const targetBusiness = requestedBusinessId
+        ? await tx.business.findUnique({ where: { id: requestedBusinessId } })
+        : await tx.business.create({
+            data: {
+              name: newBusinessName,
+              timeline: {
+                create: {
+                  eventType: "business_added",
+                  summary: "Business added from a relationship move.",
+                },
+              },
+            },
+          });
+
+      if (!targetBusiness) {
+        throw new Error("Target business not found.");
+      }
+
+      const fullName = `${currentEmployment.person.firstName} ${currentEmployment.person.lastName}`;
+
+      if (currentEmployment.businessId === targetBusiness.id) {
+        await tx.employment.update({
+          where: { id: currentEmployment.id },
+          data: { jobTitle: jobTitle || currentEmployment.jobTitle },
+        });
+
+        await tx.timelineEvent.create({
+          data: {
+            businessId: targetBusiness.id,
+            personId,
+            eventType: "role_updated",
+            summary: `${fullName}'s role was updated${jobTitle ? ` to ${jobTitle}` : ""}.`,
+          },
+        });
+
+        return;
+      }
+
       await tx.employment.update({
         where: {
           id: currentEmployment.id,
@@ -55,55 +94,33 @@ export async function POST(
       await tx.employment.create({
         data: {
           personId,
-          businessId: newBusinessId,
+          businessId: targetBusiness.id,
           jobTitle: jobTitle || currentEmployment.jobTitle,
           startDate: new Date(),
           isCurrent: true,
         },
       });
 
-      const person = await tx.person.findUnique({
-        where: {
-          id: personId,
-        },
-      });
-
-      const oldBusiness = await tx.business.findUnique({
-        where: {
-          id: currentEmployment.businessId,
-        },
-      });
-
-      const newBusiness = await tx.business.findUnique({
-        where: {
-          id: newBusinessId,
-        },
-      });
-
-      const fullName = `${person?.firstName} ${person?.lastName}`;
-
       await tx.timelineEvent.create({
         data: {
           businessId: currentEmployment.businessId,
           personId,
           eventType: "employment_left",
-          summary: `${fullName} left ${oldBusiness?.name}.`,
+          summary: `${fullName} left ${currentEmployment.business.name}.`,
         },
       });
 
       await tx.timelineEvent.create({
         data: {
-          businessId: newBusinessId,
+          businessId: targetBusiness.id,
           personId,
           eventType: "employment_joined",
-          summary: `${fullName} joined ${newBusiness?.name}.`,
+          summary: `${fullName} joined ${targetBusiness.name}.`,
         },
       });
     });
 
-    return NextResponse.json({
-      success: true,
-    });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);
 

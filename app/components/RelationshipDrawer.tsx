@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Drawer from "./Drawer";
 import { Business } from "../types/business";
 import { thinkAboutRelationship } from "../brain/relationshipHealth";
@@ -35,16 +35,57 @@ export default function RelationshipDrawer({
   onChanged,
 }: Props) {
   const [showInteraction, setShowInteraction] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [showMove, setShowMove] = useState(false);
   const [interactionType, setInteractionType] = useState("note");
   const [summary, setSummary] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+
+  const [editFirstName, setEditFirstName] = useState(
+    employment?.person.firstName ?? ""
+  );
+  const [editLastName, setEditLastName] = useState(
+    employment?.person.lastName ?? ""
+  );
+  const [editJobTitle, setEditJobTitle] = useState(employment?.jobTitle ?? "");
+  const [editLinkedInUrl, setEditLinkedInUrl] = useState(
+    employment?.person.linkedinUrl ?? ""
+  );
+  const [editEmail, setEditEmail] = useState(employment?.person.email ?? "");
+  const [editNotes, setEditNotes] = useState(employment?.person.notes ?? "");
+  const [targetBusinessId, setTargetBusinessId] = useState("");
+  const [newBusinessName, setNewBusinessName] = useState("");
+  const [moveJobTitle, setMoveJobTitle] = useState(employment?.jobTitle ?? "");
+
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+
+    async function loadBusinesses() {
+      const response = await fetch("/api/businesses");
+      const data = (await response.json()) as Business[];
+
+      if (!cancelled) {
+        setBusinesses(data);
+      }
+    }
+
+    void loadBusinesses();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   if (!employment) return null;
 
   const person = employment.person;
   const fullName = `${person.firstName} ${person.lastName}`;
   const health = thinkAboutRelationship(business, employment);
+  const otherBusinesses = businesses.filter((item) => item.id !== business.id);
 
   const interactions = business.interactions.filter(
     (interaction) => interaction.personId === person.id
@@ -77,10 +118,111 @@ export default function RelationshipDrawer({
       setInteractionType("note");
       setShowInteraction(false);
       onChanged();
-    } catch (error) {
-      setError(
-        error instanceof Error ? error.message : "Could not save interaction."
-      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not save interaction.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function savePerson() {
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/people/${person.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          businessId: business.id,
+          firstName: editFirstName,
+          lastName: editLastName,
+          jobTitle: editJobTitle,
+          linkedinUrl: editLinkedInUrl,
+          email: editEmail,
+          notes: editNotes,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not update person.");
+      }
+
+      setShowEdit(false);
+      onChanged();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update person.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function movePerson() {
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/people/${person.id}/move`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          businessId: newBusinessName.trim() ? "" : targetBusinessId,
+          newBusinessName,
+          jobTitle: moveJobTitle,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not move person.");
+      }
+
+      setShowMove(false);
+      onClose();
+      onChanged();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not move person.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function removePerson() {
+    const confirmed = window.confirm(`Remove ${fullName} from ${business.name}?`);
+
+    if (!confirmed) return;
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/people/${person.id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          businessId: business.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not remove person.");
+      }
+
+      onClose();
+      onChanged();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not remove person.");
     } finally {
       setIsSaving(false);
     }
@@ -95,7 +237,7 @@ export default function RelationshipDrawer({
               {getInitials(person.firstName, person.lastName)}
             </div>
 
-            <div>
+            <div className="min-w-0 flex-1">
               <h3 className="text-2xl font-semibold text-white">{fullName}</h3>
 
               <p className="mt-2 text-sm text-gray-400">
@@ -103,10 +245,124 @@ export default function RelationshipDrawer({
               </p>
 
               <p className="mt-4 text-sm text-cyan-300">
-                {health.status} relationship · {health.score}%
+                {health.status} relationship | {health.score}%
               </p>
             </div>
           </div>
+
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+            <button
+              onClick={() => setShowEdit((current) => !current)}
+              className="border border-white/10 px-3 py-2 text-xs text-gray-300 hover:border-cyan-300/50 hover:text-cyan-300"
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => setShowMove((current) => !current)}
+              className="border border-white/10 px-3 py-2 text-xs text-gray-300 hover:border-cyan-300/50 hover:text-cyan-300"
+            >
+              Move Business
+            </button>
+            <button
+              onClick={removePerson}
+              disabled={isSaving}
+              className="border border-white/10 px-3 py-2 text-xs text-gray-500 hover:border-red-300/50 hover:text-red-200 disabled:opacity-40"
+            >
+              Remove
+            </button>
+          </div>
+
+          {showEdit && (
+            <div className="mt-5 border border-cyan-300/20 bg-cyan-300/5 p-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  value={editFirstName}
+                  onChange={(event) => setEditFirstName(event.target.value)}
+                  placeholder="First name"
+                  className="border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600"
+                />
+                <input
+                  value={editLastName}
+                  onChange={(event) => setEditLastName(event.target.value)}
+                  placeholder="Last name"
+                  className="border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600"
+                />
+                <input
+                  value={editJobTitle}
+                  onChange={(event) => setEditJobTitle(event.target.value)}
+                  placeholder="Role / title"
+                  className="border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600"
+                />
+                <input
+                  value={editLinkedInUrl}
+                  onChange={(event) => setEditLinkedInUrl(event.target.value)}
+                  placeholder="LinkedIn URL"
+                  className="border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600"
+                />
+                <input
+                  value={editEmail}
+                  onChange={(event) => setEditEmail(event.target.value)}
+                  placeholder="Email"
+                  className="border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600"
+                />
+              </div>
+              <textarea
+                value={editNotes}
+                onChange={(event) => setEditNotes(event.target.value)}
+                placeholder="Relationship notes"
+                className="mt-3 min-h-24 w-full resize-none border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-gray-600"
+              />
+              <button
+                onClick={savePerson}
+                disabled={isSaving || !editFirstName.trim() || !editLastName.trim()}
+                className="mt-4 border border-cyan-300 px-4 py-2 text-sm text-cyan-300 hover:bg-cyan-300 hover:text-black disabled:opacity-40"
+              >
+                {isSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          )}
+
+          {showMove && (
+            <div className="mt-5 border border-cyan-300/20 bg-cyan-300/5 p-4">
+              <select
+                value={targetBusinessId}
+                onChange={(event) => setTargetBusinessId(event.target.value)}
+                disabled={Boolean(newBusinessName.trim())}
+                className="w-full border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
+              >
+                <option value="">Choose an existing business</option>
+                {otherBusinesses.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                value={newBusinessName}
+                onChange={(event) => setNewBusinessName(event.target.value)}
+                placeholder="Or create a new business"
+                className="mt-3 w-full border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600"
+              />
+
+              <input
+                value={moveJobTitle}
+                onChange={(event) => setMoveJobTitle(event.target.value)}
+                placeholder="New role / title"
+                className="mt-3 w-full border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600"
+              />
+
+              <button
+                onClick={movePerson}
+                disabled={isSaving || (!targetBusinessId && !newBusinessName.trim())}
+                className="mt-4 border border-cyan-300 px-4 py-2 text-sm text-cyan-300 hover:bg-cyan-300 hover:text-black disabled:opacity-40"
+              >
+                {isSaving ? "Moving..." : "Move Relationship"}
+              </button>
+            </div>
+          )}
+
+          {error && <p className="mt-4 text-sm text-red-300">{error}</p>}
         </section>
 
         <section className="border-t border-white/10 pt-6">
@@ -123,7 +379,7 @@ export default function RelationshipDrawer({
           <div className="mt-5 space-y-2">
             {health.reasons.map((reason) => (
               <p key={reason} className="text-sm text-gray-400">
-                • {reason}
+                {reason}
               </p>
             ))}
           </div>
@@ -164,8 +420,6 @@ export default function RelationshipDrawer({
                 placeholder="What happened?"
                 className="mt-3 min-h-28 w-full resize-none border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-gray-600"
               />
-
-              {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
 
               <div className="mt-4 flex gap-3">
                 <button

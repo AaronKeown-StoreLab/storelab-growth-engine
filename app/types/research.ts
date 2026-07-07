@@ -10,13 +10,15 @@ export type ResearchSourceKind =
   | "Notes"
   | "File";
 
-export type ResearchProposalAction = "create_business" | "attach_to_business";
+export type ResearchProposalAction = "create_business" | "attach_to_business" | "needs_more_context";
 
 export type ResearchSourceForAnalysis = {
   name: string;
   kind: ResearchSourceKind;
   detail: string;
   content?: string;
+  imageDataUrl?: string;
+  mimeType?: string;
   detected: string[];
 };
 

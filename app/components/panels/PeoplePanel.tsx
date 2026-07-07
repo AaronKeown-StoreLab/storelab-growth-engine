@@ -170,6 +170,7 @@ export default function PeoplePanel({ business, onChanged }: Props) {
       </section>
 
       <RelationshipDrawer
+        key={selectedEmployment?.id ?? "closed"}
         business={business}
         employment={selectedEmployment}
         open={Boolean(selectedEmployment)}

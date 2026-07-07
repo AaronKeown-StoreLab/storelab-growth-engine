@@ -12,6 +12,13 @@ type Input = {
   preferredBusinessId?: string;
 };
 
+type ExtractedPerson = {
+  firstName: string;
+  lastName: string;
+  jobTitle?: string;
+  employerName?: string;
+};
+
 function cleanJsonResult(result: string) {
   return result
     .replace(/```json/g, "")
@@ -25,6 +32,15 @@ function words(value: string) {
     .replace(/[^a-z0-9]+/g, " ")
     .split(" ")
     .filter((word) => word.length > 2);
+}
+
+function normaliseName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/\b(pty|ltd|limited|inc|corp|corporation|company|co)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function hostFromDetail(detail: string) {
@@ -45,7 +61,16 @@ function titleFromHost(host: string) {
     .join(" ");
 }
 
-function nameFromLinkedInUrl(detail: string) {
+function isPlatformSource(detail: string) {
+  const host = hostFromDetail(detail);
+  const platformHosts = ["linkedin.com", "facebook.com", "instagram.com", "x.com", "twitter.com"];
+
+  return platformHosts.some(
+    (platformHost) => host === platformHost || host.endsWith(`.${platformHost}`)
+  );
+}
+
+function nameFromLinkedInUrl(detail: string): ExtractedPerson | null {
   try {
     const url = new URL(detail);
     const match = url.pathname.match(/\/in\/([^/?#]+)/i);
@@ -69,12 +94,12 @@ function nameFromLinkedInUrl(detail: string) {
   }
 }
 
-function nameFromSourceContent(content?: string) {
+function nameFromSourceContent(content?: string): ExtractedPerson | null {
   if (!content) return null;
 
   const compact = content.replace(/\s+/g, " ").trim();
   const match = compact.match(
-    /\b([A-Z][a-z]+)\s+([A-Z][a-z]+)\b(?:\s+is)?(?:\s+(?:a|an|the))?\s+([^.,;]{2,80}?)\s+(?:at|with|for)\s+([A-Z][A-Za-z0-9&' -]{1,80})/i
+    /\b([A-Z][a-z]+)\s+([A-Z][a-z]+)\b.*?\b([^.,;\n]{2,80}?)\s+(?:at|with|for)\s+([A-Z0-9][A-Za-z0-9&' -]{1,80}?)(?=\s+(?:Melbourne|Sydney|Brisbane|Perth|Adelaide|Victoria|NSW|Queensland|and|in|from|based|is|was|on)|[.,;\n]|$)/
   );
 
   if (!match) return null;
@@ -82,12 +107,25 @@ function nameFromSourceContent(content?: string) {
   const jobTitle = match[3]
     ?.replace(/^(is|a|an|the)\s+/i, "")
     .trim();
+  const employerName = match[4]?.trim();
 
   return {
     firstName: `${match[1].charAt(0).toUpperCase()}${match[1].slice(1)}`,
     lastName: `${match[2].charAt(0).toUpperCase()}${match[2].slice(1)}`,
     jobTitle: jobTitle || undefined,
+    employerName: employerName || undefined,
   };
+}
+
+function employerFromContent(content?: string) {
+  if (!content) return "";
+
+  const compact = content.replace(/\s+/g, " ").trim();
+  const match = compact.match(
+    /\b(?:works?\s+(?:at|with|for)|employed\s+(?:at|by)|(?:at|with|for))\s+([A-Z0-9][A-Za-z0-9&' -]{1,80}?)(?=\s+(?:Melbourne|Sydney|Brisbane|Perth|Adelaide|Victoria|NSW|Queensland|and|in|from|based|is|was|on)|[.,;\n]|$)/
+  );
+
+  return match?.[1]?.trim() ?? "";
 }
 
 function linkedinUrlFromDetail(detail: string) {
@@ -95,13 +133,27 @@ function linkedinUrlFromDetail(detail: string) {
 
   return host === "linkedin.com" || host.endsWith(".linkedin.com") ? detail : undefined;
 }
+
+function findBusinessByName(name: string, businesses: ResearchBusinessContext[]) {
+  const normalised = normaliseName(name);
+
+  if (!normalised) return undefined;
+
+  return businesses.find((business) => {
+    const businessName = normaliseName(business.name);
+
+    return (
+      businessName === normalised ||
+      businessName.includes(normalised) ||
+      normalised.includes(businessName)
+    );
+  });
+}
+
 function findBusinessMatch(source: ResearchSourceForAnalysis, businesses: ResearchBusinessContext[]) {
   const host = hostFromDetail(source.detail);
-  const platformHosts = ["linkedin.com", "facebook.com", "instagram.com", "x.com", "twitter.com"];
-  const isPlatformSource = platformHosts.some(
-    (platformHost) => host === platformHost || host.endsWith(`.${platformHost}`)
-  );
-  const haystack = [isPlatformSource ? "" : source.detail, source.content ?? ""]
+  const platformSource = isPlatformSource(source.detail);
+  const haystack = [platformSource ? "" : source.detail, source.content ?? ""]
     .join(" ")
     .toLowerCase();
 
@@ -109,44 +161,69 @@ function findBusinessMatch(source: ResearchSourceForAnalysis, businesses: Resear
     const businessWords = words(business.name);
     const websiteHost = business.website ? hostFromDetail(business.website) : "";
 
-    if (!isPlatformSource && websiteHost && host && websiteHost === host) return true;
+    if (!platformSource && websiteHost && host && websiteHost === host) return true;
     if (business.name && haystack.includes(business.name.toLowerCase())) return true;
 
     return businessWords.some((word) => haystack.includes(word));
   });
 }
 
-function fallbackAnalysis(input: Input): ResearchAnalysis {
-  const preferredBusiness = input.businesses.find(
-    (business) => business.id === input.preferredBusinessId
-  );
-  const sourcePerson =
-    nameFromLinkedInUrl(input.source.detail) ?? nameFromSourceContent(input.source.content);
-  const match =
-    findBusinessMatch(input.source, input.businesses) ??
-    (sourcePerson ? preferredBusiness : undefined);
-  const host = hostFromDetail(input.source.detail);
-  const inferredName = host ? titleFromHost(host) : input.source.name;
+function proposalPerson(source: ResearchSourceForAnalysis, person?: ExtractedPerson | null) {
+  if (!person) return undefined;
 
-  const person = sourcePerson
-    ? {
-        ...sourcePerson,
-        linkedinUrl: linkedinUrlFromDetail(input.source.detail),
-        notes: `Captured from ${input.source.name}.`,
-      }
-    : undefined;
+  return {
+    firstName: person.firstName,
+    lastName: person.lastName,
+    jobTitle: person.jobTitle,
+    linkedinUrl: linkedinUrlFromDetail(source.detail),
+    notes: `Captured from ${source.name}.`,
+  };
+}
+
+function needsMoreContextProposal(input: Input, person?: ExtractedPerson | null): ResearchProposal {
+  const personName = person ? `${person.firstName} ${person.lastName}` : "this LinkedIn profile";
+
+  return {
+    action: "needs_more_context",
+    confidence: "low",
+    title: `Need employer for ${personName}`,
+    description:
+      "The source did not expose enough profile detail to safely choose a business. Paste the profile text or add a screenshot so StoreLab OS can read the employer before anything is saved.",
+    person: proposalPerson(input.source, person),
+    evidenceTitle: input.source.name,
+    evidenceContent: input.source.content || input.source.detail || input.source.name,
+  };
+}
+
+function fallbackAnalysis(input: Input): ResearchAnalysis {
+  const sourcePerson =
+    nameFromSourceContent(input.source.content) ?? nameFromLinkedInUrl(input.source.detail);
+  const employerName = sourcePerson?.employerName ?? employerFromContent(input.source.content);
+  const employerMatch = employerName ? findBusinessByName(employerName, input.businesses) : undefined;
+  const match = employerMatch ?? findBusinessMatch(input.source, input.businesses);
+  const host = hostFromDetail(input.source.detail);
+  const platformSource = isPlatformSource(input.source.detail);
+  const inferredName = employerName || (host ? titleFromHost(host) : input.source.name);
+  const person = proposalPerson(input.source, sourcePerson);
+
+  if (!match && platformSource && !employerName) {
+    return {
+      summary: `Need more profile detail before adding ${input.source.name}.`,
+      proposals: [needsMoreContextProposal(input, sourcePerson)],
+    };
+  }
 
   const baseProposal: ResearchProposal = match
     ? {
         action: "attach_to_business",
         businessId: match.id,
-        confidence: person ? "medium" : "low",
+        confidence: employerName || person ? "medium" : "low",
         title: person
           ? `Add ${person.firstName} ${person.lastName} to ${match.name}`
           : `Add source to ${match.name}`,
         description: person
-          ? `Detected a person profile and matched this source to ${match.name}.`
-          : `Matched this source to an existing business based on source text or domain.`,
+          ? `Matched this source to ${match.name} from the employer or source evidence.`
+          : "Matched this source to an existing business based on source text or domain.",
         person,
         evidenceTitle: input.source.name,
         evidenceContent: input.source.content || input.source.detail || input.source.name,
@@ -154,12 +231,16 @@ function fallbackAnalysis(input: Input): ResearchAnalysis {
     : {
         action: "create_business",
         businessName: inferredName,
-        confidence: host ? "medium" : "low",
-        title: `Create ${inferredName}`,
-        description: "No existing business match was found. Approve to create a new business workspace from this source.",
+        confidence: employerName ? "medium" : host ? "medium" : "low",
+        title: person
+          ? `Create ${inferredName} and add ${person.firstName} ${person.lastName}`
+          : `Create ${inferredName}`,
+        description: employerName
+          ? `Detected ${employerName} as the employer. Approve to create the business and attach the person/source.`
+          : "No existing business match was found. Approve to create a new business workspace from this source.",
         businessUpdates: {
           name: inferredName,
-          website: input.source.kind === "Website" ? input.source.detail : undefined,
+          website: !platformSource && input.source.kind === "Website" ? input.source.detail : undefined,
           summary: `Created from approved research source: ${input.source.name}.`,
         },
         person,
@@ -170,7 +251,7 @@ function fallbackAnalysis(input: Input): ResearchAnalysis {
   return {
     summary: match
       ? `Matched ${input.source.name} to ${match.name}.`
-      : `Prepared ${input.source.name} as a new business proposal.`,
+      : `Prepared ${inferredName} as a new business proposal.`,
     proposals: [baseProposal],
   };
 }
@@ -192,7 +273,8 @@ function normalizeAnalysis(value: unknown, fallback: ResearchAnalysis): Research
           proposal &&
             typeof proposal === "object" &&
             (proposal.action === "create_business" ||
-              proposal.action === "attach_to_business") &&
+              proposal.action === "attach_to_business" ||
+              proposal.action === "needs_more_context") &&
             typeof proposal.title === "string" &&
             typeof proposal.description === "string"
         );
@@ -214,16 +296,7 @@ export async function analyseResearchSource(input: Input): Promise<ResearchAnaly
     return fallback;
   }
 
-  try {
-    const response = await getOpenAIClient().responses.create({
-      model: "gpt-4.1-mini",
-      input: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: `
+  const prompt = `
 You are the StoreLab OS Research Brain.
 
 Your job is to analyse one research source and propose Relationship OS changes.
@@ -236,22 +309,24 @@ Currently selected business, when the user is working inside one:
 ${JSON.stringify(input.businesses.find((business) => business.id === input.preferredBusinessId) ?? null, null, 2)}
 
 Source:
-${JSON.stringify(input.source, null, 2)}
+${JSON.stringify({ ...input.source, imageDataUrl: input.source.imageDataUrl ? "[image attached]" : undefined }, null, 2)}
 
 Rules:
 - If the source is about a person/customer at an existing business, propose attach_to_business with the existing businessId and a person object.
-- If the source identifies a new business, propose create_business with businessUpdates.
+- If the source identifies a new employer/business, propose create_business with businessUpdates and include the person if visible.
 - If both a new business and a person are visible, include both in one create_business proposal.
+- Prefer the employer shown in the source over the currently selected business. Never attach a person to the selected business if the source shows a different employer.
 - Prefer existing business matches over creating duplicates. Match by business name, brand, website domain, employer, and source content.
-- If the source is a person profile and the employer is not visible, use the currently selected business as the attach target when present.
 - If a LinkedIn profile shows a person and employer, put the person in person and the employer/business in business matching fields.
+- If a LinkedIn URL alone does not expose employer/profile text, return needs_more_context instead of guessing or attaching to the selected business.
+- For screenshots/images, read visible LinkedIn profile text, including name, headline, current employer, location, education, and visible mutuals.
 - Keep confidence honest: low, medium, high.
 - Return ONLY JSON with this shape:
 {
   "summary": "short explanation",
   "proposals": [
     {
-      "action": "create_business | attach_to_business",
+      "action": "create_business | attach_to_business | needs_more_context",
       "confidence": "low | medium | high",
       "title": "approval button title",
       "description": "what will happen if approved",
@@ -277,9 +352,33 @@ Rules:
     }
   ]
 }
-`,
-            },
-          ],
+`;
+
+  const messageContent: Array<
+    | { type: "input_text"; text: string }
+    | { type: "input_image"; image_url: string; detail: "high" }
+  > = [
+    {
+      type: "input_text",
+      text: prompt,
+    },
+  ];
+
+  if (input.source.imageDataUrl) {
+    messageContent.push({
+      type: "input_image",
+      image_url: input.source.imageDataUrl,
+      detail: "high",
+    });
+  }
+
+  try {
+    const response = await getOpenAIClient().responses.create({
+      model: "gpt-4.1-mini",
+      input: [
+        {
+          role: "user",
+          content: messageContent,
         },
       ],
     });
