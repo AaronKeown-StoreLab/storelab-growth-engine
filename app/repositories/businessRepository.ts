@@ -70,12 +70,16 @@ export async function getBusinessById(businessId: string) {
 export async function createBusiness(data: {
   name: string;
   website?: string;
+  industry?: string;
+  country?: string;
   summary?: string;
 }) {
   return prisma.business.create({
     data: {
       name: data.name,
       website: data.website || null,
+      industry: data.industry || null,
+      country: data.country || null,
       summary: data.summary || null,
       timeline: {
         create: {
@@ -86,6 +90,37 @@ export async function createBusiness(data: {
     },
     include: businessInclude,
   });
+}
+
+export async function updateBusiness(
+  businessId: string,
+  data: {
+    name?: string;
+    website?: string;
+    industry?: string;
+    country?: string;
+    summary?: string;
+    status?: string;
+  }
+) {
+  return prisma.business.update({
+    where: {
+      id: businessId,
+    },
+    data: {
+      name: data.name,
+      website: data.website,
+      industry: data.industry,
+      country: data.country,
+      summary: data.summary,
+      status: data.status,
+    },
+    include: businessInclude,
+  });
+}
+
+export async function archiveBusiness(businessId: string) {
+  return updateBusiness(businessId, { status: "archived" });
 }
 
 export async function addEvidenceToBusiness(data: {
@@ -114,6 +149,86 @@ export async function addEvidenceToBusiness(data: {
   });
 
   return evidence;
+}
+
+export async function addPersonToBusiness(data: {
+  businessId: string;
+  firstName: string;
+  lastName: string;
+  jobTitle?: string;
+  linkedinUrl?: string;
+  email?: string;
+  notes?: string;
+}) {
+  const existingPerson = await prisma.person.findFirst({
+    where: {
+      OR: [
+        data.linkedinUrl ? { linkedinUrl: data.linkedinUrl } : undefined,
+        data.email ? { email: data.email } : undefined,
+        {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          employments: {
+            some: {
+              businessId: data.businessId,
+              isCurrent: true,
+            },
+          },
+        },
+      ].filter(Boolean) as object[],
+    },
+  });
+
+  const person = existingPerson
+    ? await prisma.person.update({
+        where: {
+          id: existingPerson.id,
+        },
+        data: {
+          linkedinUrl: data.linkedinUrl || existingPerson.linkedinUrl,
+          email: data.email || existingPerson.email,
+          notes: data.notes || existingPerson.notes,
+        },
+      })
+    : await prisma.person.create({
+        data: {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          linkedinUrl: data.linkedinUrl || null,
+          email: data.email || null,
+          notes: data.notes || null,
+        },
+      });
+
+  const currentEmployment = await prisma.employment.findFirst({
+    where: {
+      personId: person.id,
+      businessId: data.businessId,
+      isCurrent: true,
+    },
+  });
+
+  if (!currentEmployment) {
+    await prisma.employment.create({
+      data: {
+        personId: person.id,
+        businessId: data.businessId,
+        jobTitle: data.jobTitle || null,
+        isCurrent: true,
+      },
+    });
+  }
+
+  await prisma.timelineEvent.create({
+    data: {
+      businessId: data.businessId,
+      personId: person.id,
+      eventType: "person_added",
+      summary: `${data.firstName} ${data.lastName} was approved into this business.`,
+    },
+  });
+
+  return person;
 }
 
 export async function addNotebookEntryToBusiness(

@@ -11,12 +11,18 @@ import TimelinePanel from "./panels/TimelinePanel";
 type Props = {
   business: Business;
   onChanged: () => void;
+  onDeleted: () => void;
 };
 
-export default function BusinessWorkspace({ business, onChanged }: Props) {
+export default function BusinessWorkspace({ business, onChanged, onDeleted }: Props) {
   return (
     <div className="h-full overflow-y-auto pr-2 no-scrollbar">
-      <BusinessHeader business={business} />
+      <BusinessHeader
+        key={business.id}
+        business={business}
+        onChanged={onChanged}
+        onDeleted={onDeleted}
+      />
 
       <PeoplePanel business={business} onChanged={onChanged} />
 

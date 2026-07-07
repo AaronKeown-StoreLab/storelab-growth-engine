@@ -28,6 +28,15 @@ export default function TodayBrief() {
     setBusinessSearch("");
   }
 
+  function handleBusinessDeleted() {
+    const deletedId = selectedBusiness?.id;
+
+    if (!deletedId) return;
+
+    setBusinesses((current) => current.filter((business) => business.id !== deletedId));
+    setSelectedBusiness(null);
+  }
+
   async function refreshBusinesses() {
     const response = await fetch("/api/businesses");
     const data = (await response.json()) as Business[];
@@ -174,6 +183,7 @@ export default function TodayBrief() {
             <BusinessWorkspace
               business={selectedBusiness}
               onChanged={refreshBusinesses}
+              onDeleted={handleBusinessDeleted}
             />
           ) : (
             <InboxPanel />

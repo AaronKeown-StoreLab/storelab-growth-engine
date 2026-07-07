@@ -1,16 +1,14 @@
 import {
   addEvidenceToBusiness,
+  addPersonToBusiness,
   createBusiness,
   getBusinessById,
+  updateBusiness,
 } from "../repositories/businessRepository";
-
-type ApprovalAction = "create_business" | "attach_to_business";
+import { ResearchProposal, ResearchProposalAction } from "../types/research";
 
 type ApprovalInput = {
-  action?: unknown;
-  businessId?: unknown;
-  businessName?: unknown;
-  website?: unknown;
+  proposal?: ResearchProposal;
   source?: {
     name?: unknown;
     kind?: unknown;
@@ -23,7 +21,7 @@ function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function getApprovalAction(value: unknown): ApprovalAction {
+function getApprovalAction(value: unknown): ResearchProposalAction {
   if (value === "create_business" || value === "attach_to_business") {
     return value;
   }
@@ -31,7 +29,7 @@ function getApprovalAction(value: unknown): ApprovalAction {
   throw new Error("Approval action is required.");
 }
 
-function sourceContent(input: ApprovalInput) {
+function sourceFallback(input: ApprovalInput) {
   const source = input.source ?? {};
   const name = cleanText(source.name) || "Research source";
   const kind = cleanText(source.kind) || "Source";
@@ -51,29 +49,34 @@ function sourceContent(input: ApprovalInput) {
   };
 }
 
-function websiteFromSource(input: ApprovalInput) {
-  const explicitWebsite = cleanText(input.website);
-  if (explicitWebsite) return explicitWebsite;
-
-  const detail = cleanText(input.source?.detail);
-
-  if (/^https?:\/\//i.test(detail)) return detail;
-
-  return "";
+function businessNameFromProposal(proposal: ResearchProposal, fallbackName: string) {
+  return (
+    cleanText(proposal.businessUpdates?.name) ||
+    cleanText(proposal.businessName) ||
+    fallbackName
+  );
 }
 
 export async function approveResearchSource(input: ApprovalInput) {
-  const action = getApprovalAction(input.action);
-  const source = sourceContent(input);
-  let businessId = cleanText(input.businessId);
+  if (!input.proposal) {
+    throw new Error("Approval proposal is required.");
+  }
+
+  const proposal = input.proposal;
+  const action = getApprovalAction(proposal.action);
+  const source = sourceFallback(input);
+  let businessId = cleanText(proposal.businessId);
 
   if (action === "create_business") {
-    const businessName = cleanText(input.businessName) || source.name;
-
     const business = await createBusiness({
-      name: businessName,
-      website: websiteFromSource(input),
-      summary: `Created from approved research source: ${source.name}.`,
+      name: businessNameFromProposal(proposal, source.name),
+      website: cleanText(proposal.businessUpdates?.website) || source.detail,
+      industry: cleanText(proposal.businessUpdates?.industry),
+      country: cleanText(proposal.businessUpdates?.country),
+      summary:
+        cleanText(proposal.businessUpdates?.summary) ||
+        cleanText(proposal.description) ||
+        `Created from approved research source: ${source.name}.`,
     });
 
     businessId = business.id;
@@ -83,11 +86,40 @@ export async function approveResearchSource(input: ApprovalInput) {
     throw new Error("Choose a business before approving this source.");
   }
 
+  if (action === "attach_to_business" && proposal.businessUpdates) {
+    const current = await getBusinessById(businessId);
+
+    if (current) {
+      await updateBusiness(businessId, {
+        name: cleanText(proposal.businessUpdates.name) || current.name,
+        website: cleanText(proposal.businessUpdates.website) || current.website || "",
+        industry: cleanText(proposal.businessUpdates.industry) || current.industry || "",
+        country: cleanText(proposal.businessUpdates.country) || current.country || "",
+        summary: cleanText(proposal.businessUpdates.summary) || current.summary || "",
+      });
+    }
+  }
+
+  const personFirstName = cleanText(proposal.person?.firstName);
+  const personLastName = cleanText(proposal.person?.lastName);
+
+  if (personFirstName && personLastName) {
+    await addPersonToBusiness({
+      businessId,
+      firstName: personFirstName,
+      lastName: personLastName,
+      jobTitle: cleanText(proposal.person?.jobTitle),
+      linkedinUrl: cleanText(proposal.person?.linkedinUrl),
+      email: cleanText(proposal.person?.email),
+      notes: cleanText(proposal.person?.notes),
+    });
+  }
+
   await addEvidenceToBusiness({
     businessId,
     type: source.kind.toLowerCase(),
-    title: source.name,
-    content: source.content || source.name,
+    title: cleanText(proposal.evidenceTitle) || source.name,
+    content: cleanText(proposal.evidenceContent) || source.content || source.name,
     source: source.detail,
   });
 

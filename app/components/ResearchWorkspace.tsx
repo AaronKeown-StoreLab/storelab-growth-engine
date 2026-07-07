@@ -10,39 +10,28 @@ import {
   useState,
 } from "react";
 import { Business } from "../types/business";
-
-type SourceKind =
-  | "PDF"
-  | "Image"
-  | "Document"
-  | "Presentation"
-  | "Spreadsheet"
-  | "Audio"
-  | "Video"
-  | "Website"
-  | "Notes"
-  | "File";
+import {
+  ResearchAnalysis,
+  ResearchProposal,
+  ResearchSourceKind,
+} from "../types/research";
 
 type SourceOrigin = "file" | "clipboard" | "url" | "drop";
-type ProposalAction = "create_business" | "attach_to_business";
 
 type ResearchSource = {
   id: string;
   name: string;
-  kind: SourceKind;
+  kind: ResearchSourceKind;
   origin: SourceOrigin;
   detail: string;
   capturedAt: string;
   detected: string[];
+  content?: string;
 };
 
-type ResearchProposal = {
+type PendingProposal = ResearchProposal & {
   id: string;
   sourceId: string;
-  action: ProposalAction;
-  title: string;
-  description: string;
-  businessName?: string;
 };
 
 type Props = {
@@ -70,7 +59,7 @@ function getExtension(name: string) {
   return name.split(".").pop()?.toLowerCase() ?? "";
 }
 
-function detectFileKind(file: File): SourceKind {
+function detectFileKind(file: File): ResearchSourceKind {
   const extension = getExtension(file.name);
 
   if (file.type === "application/pdf" || extension === "pdf") return "PDF";
@@ -93,11 +82,11 @@ function detectFileKind(file: File): SourceKind {
   return "File";
 }
 
-function detectedFor(kind: SourceKind) {
-  const common = ["Metadata captured", "Entity scan queued"];
+function detectedFor(kind: ResearchSourceKind) {
+  const common = ["Metadata captured", "Brain review queued"];
 
   if (kind === "Website") return ["URL captured", "Website read queued"];
-  if (kind === "Notes") return ["Text captured", "Entity scan queued"];
+  if (kind === "Notes") return ["Text captured", "Brain review queued"];
   if (kind === "PDF") return ["Document captured", "Text extraction queued"];
   if (kind === "Image") return ["Image captured", "OCR queued"];
   if (kind === "Presentation") return ["Slides captured", "Text extraction queued"];
@@ -169,6 +158,7 @@ function sourceFromText(value: string, origin: SourceOrigin): ResearchSource {
       minute: "2-digit",
     }),
     detected: detectedFor("Notes"),
+    content: compact,
   };
 }
 
@@ -185,57 +175,21 @@ function sourceBadge(source: ResearchSource) {
   return extension ? extension.slice(0, 4).toUpperCase() : source.kind.slice(0, 4);
 }
 
-function suggestedBusinessName(source: ResearchSource) {
-  if (source.kind !== "Website") return source.name;
-
-  const host = source.name.split(".")[0] ?? source.name;
-
-  return host
-    .split("-")
-    .filter(Boolean)
-    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-    .join(" ");
-}
-
-function proposalsForSource(source: ResearchSource, business?: Business | null) {
-  const proposals: ResearchProposal[] = [];
-
-  if (business) {
-    proposals.push({
-      id: makeId(),
-      sourceId: source.id,
-      action: "attach_to_business",
-      title: `Add to ${business.name}`,
-      description: "Approve this source into the selected relationship workspace.",
-    });
-  }
-
-  proposals.push({
-    id: makeId(),
-    sourceId: source.id,
-    action: "create_business",
-    title: `Create ${suggestedBusinessName(source)}`,
-    description: "Approve this as a new customer/business workspace.",
-    businessName: suggestedBusinessName(source),
-  });
-
-  return proposals;
-}
-
 export default function ResearchWorkspace({ business, onBusinessApproved }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sources, setSources] = useState<ResearchSource[]>([]);
-  const [proposals, setProposals] = useState<ResearchProposal[]>([]);
+  const [proposals, setProposals] = useState<PendingProposal[]>([]);
   const [urlValue, setUrlValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [workingProposalId, setWorkingProposalId] = useState<string | null>(null);
+  const [analysingSourceIds, setAnalysingSourceIds] = useState<string[]>([]);
 
   const sourceMix = useMemo(() => {
-    const counts = sources.reduce<Record<SourceKind, number>>((current, source) => {
+    const counts = sources.reduce<Record<ResearchSourceKind, number>>((current, source) => {
       current[source.kind] = (current[source.kind] ?? 0) + 1;
       return current;
-    }, {} as Record<SourceKind, number>);
+    }, {} as Record<ResearchSourceKind, number>);
 
     return Object.entries(counts)
       .map(([kind, count]) => `${count} ${kind}`)
@@ -246,19 +200,67 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
     sources.some((source) => source.id === proposal.sourceId)
   );
 
+  async function analyseSource(source: ResearchSource) {
+    setAnalysingSourceIds((current) => [...current, source.id]);
+
+    try {
+      const response = await fetch("/api/research/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          source: {
+            name: source.name,
+            kind: source.kind,
+            detail: source.detail,
+            detected: source.detected,
+            content: source.content,
+          },
+          preferredBusinessId: business?.id,
+        }),
+      });
+
+      const data = (await response.json()) as ResearchAnalysis | { error?: string };
+
+      if (!response.ok) {
+        throw new Error("error" in data ? data.error : "Could not analyse source.");
+      }
+
+      if (!("proposals" in data)) {
+        throw new Error("Could not analyse source.");
+      }
+
+      setProposals((current) => [
+        ...data.proposals.map((proposal) => ({
+          ...proposal,
+          id: makeId(),
+          sourceId: source.id,
+        })),
+        ...current,
+      ]);
+      setNotice(data.summary || `${source.name} analysed. Review the proposal.`);
+    } catch (caught) {
+      setNotice(
+        caught instanceof Error ? caught.message : "Could not analyse this source."
+      );
+    } finally {
+      setAnalysingSourceIds((current) =>
+        current.filter((sourceId) => sourceId !== source.id)
+      );
+    }
+  }
+
   function addSources(nextSources: ResearchSource[]) {
     if (!nextSources.length) return;
 
     setSources((current) => [...nextSources, ...current]);
-    setProposals((current) => [
-      ...nextSources.flatMap((source) => proposalsForSource(source, business)),
-      ...current,
-    ]);
     setNotice(
       nextSources.length === 1
-        ? `${nextSources[0].name} staged for approval.`
-        : `${nextSources.length} sources staged for approval.`
+        ? `${nextSources[0].name} captured. Brain is reading it now.`
+        : `${nextSources.length} sources captured. Brain is reading them now.`
     );
+    nextSources.forEach((source) => void analyseSource(source));
   }
 
   function addFiles(files: FileList | File[], origin: SourceOrigin) {
@@ -296,7 +298,7 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
     }
   }
 
-  async function approveProposal(proposal: ResearchProposal) {
+  async function approveProposal(proposal: PendingProposal) {
     const source = sources.find((item) => item.id === proposal.sourceId);
 
     if (!source) return;
@@ -311,16 +313,15 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          action: proposal.action,
-          businessId: proposal.action === "attach_to_business" ? business?.id : undefined,
-          businessName: proposal.businessName,
-          website: source.kind === "Website" ? source.detail : undefined,
+          proposal,
           source: {
             name: source.name,
             kind: source.kind,
             detail: source.detail,
             detected: source.detected,
+            content: source.content,
           },
+          preferredBusinessId: business?.id,
         }),
       });
 
@@ -396,6 +397,7 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
   function removeSource(id: string) {
     setSources((current) => current.filter((source) => source.id !== id));
     setProposals((current) => current.filter((proposal) => proposal.sourceId !== id));
+    setAnalysingSourceIds((current) => current.filter((sourceId) => sourceId !== id));
   }
 
   return (
@@ -447,7 +449,7 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
           Drop, paste or browse anything
         </span>
         <span className="mt-2 max-w-xl text-sm leading-relaxed text-gray-400">
-          Sources become pending proposals. Nothing is added until you approve it.
+          The Brain reads sources and proposes changes. Nothing is added until you approve it.
         </span>
         <span className="mt-5 border border-cyan-300 px-4 py-2 text-sm font-medium text-cyan-300">
           Browse Files
@@ -494,6 +496,7 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
               onClick={() => {
                 setSources([]);
                 setProposals([]);
+                setAnalysingSourceIds([]);
               }}
               className="text-sm text-gray-500 transition hover:text-white"
             >
@@ -534,6 +537,11 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
                         {item}
                       </span>
                     ))}
+                    {analysingSourceIds.includes(source.id) && (
+                      <span className="border border-cyan-300/30 bg-cyan-300/5 px-2 py-1 text-xs text-cyan-200">
+                        Brain reading
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -568,21 +576,34 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
             pendingProposals.map((proposal) => (
               <div
                 key={proposal.id}
-                className="flex flex-col gap-3 border border-white/10 bg-black/20 p-3 md:flex-row md:items-center md:justify-between"
+                className="flex flex-col gap-3 border border-white/10 bg-black/20 p-3"
               >
-                <div>
-                  <p className="text-sm font-medium text-white">{proposal.title}</p>
-                  <p className="mt-1 text-xs text-gray-500">{proposal.description}</p>
-                </div>
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-white">{proposal.title}</p>
+                      <span className="border border-white/10 px-2 py-1 text-xs text-gray-500">
+                        {proposal.confidence} confidence
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">{proposal.description}</p>
+                    {proposal.person?.firstName && proposal.person.lastName && (
+                      <p className="mt-2 text-xs text-cyan-200">
+                        Customer: {proposal.person.firstName} {proposal.person.lastName}
+                        {proposal.person.jobTitle ? `, ${proposal.person.jobTitle}` : ""}
+                      </p>
+                    )}
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={() => approveProposal(proposal)}
-                  disabled={Boolean(workingProposalId)}
-                  className="min-h-10 border border-cyan-300 px-4 text-sm font-medium text-cyan-300 transition hover:bg-cyan-300 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {workingProposalId === proposal.id ? "Approving..." : "Approve"}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => approveProposal(proposal)}
+                    disabled={Boolean(workingProposalId)}
+                    className="min-h-10 border border-cyan-300 px-4 text-sm font-medium text-cyan-300 transition hover:bg-cyan-300 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {workingProposalId === proposal.id ? "Approving..." : "Approve"}
+                  </button>
+                </div>
               </div>
             ))
           ) : (
@@ -596,7 +617,14 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
       <div className="mt-5 grid gap-3 border-t border-white/10 pt-5 md:grid-cols-3">
         {[
           ["Capture", sources.length ? `${sources.length} staged` : "Standing by"],
-          ["Propose", pendingProposals.length ? "Approval needed" : "Waiting"],
+          [
+            "Propose",
+            analysingSourceIds.length
+              ? "Brain reading"
+              : pendingProposals.length
+                ? "Approval needed"
+                : "Waiting",
+          ],
           ["Commit", "Only after approval"],
         ].map(([label, value]) => (
           <div key={label} className="border border-white/10 bg-black/20 p-3">
