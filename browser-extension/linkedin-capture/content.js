@@ -52,6 +52,19 @@ if (!window.__STORELAB_LINKEDIN_CAPTURE_READY__) {
       }) || "";
   }
 
+  function profileHeaderText() {
+    const heading = document.querySelector("h1");
+    const section = heading?.closest("section") || document.querySelector("main section");
+
+    return readableText(section?.innerText || section?.textContent || "");
+  }
+
+  function connectionDegree() {
+    const match = profileHeaderText().match(/(?:^|\n|[\u00b7\s])(1st|2nd|3rd)(?:\s|\n|$)/i);
+
+    return match?.[1]?.toLowerCase() || "";
+  }
+
   function captureProfile() {
     const name =
       textFrom("h1") ||
@@ -67,11 +80,13 @@ if (!window.__STORELAB_LINKEDIN_CAPTURE_READY__) {
     ]).slice(0, 6);
     const educationHints = uniqueLines(linesFrom('a[href*="/school/"]')).slice(0, 4);
     const experience = sectionTextByHeading("Experience");
+    const relationship = connectionDegree();
     const content = [
       `Person LinkedIn URL: ${window.location.href}`,
       `Profile name: ${name}`,
       headline ? `Headline: ${headline}` : "",
       location ? `Location: ${location}` : "",
+      relationship ? `LinkedIn relationship: ${relationship}` : "",
       companyHints.length ? `Company clues: ${companyHints.join(" | ")}` : "",
       educationHints.length ? `Education clues: ${educationHints.join(" | ")}` : "",
       experience ? `Experience section:\n${experience}` : "",
@@ -86,6 +101,7 @@ if (!window.__STORELAB_LINKEDIN_CAPTURE_READY__) {
       title: name,
       headline,
       location,
+      relationship,
       companyHints,
       experience,
       content,

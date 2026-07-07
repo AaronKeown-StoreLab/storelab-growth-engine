@@ -19,6 +19,7 @@ type ExtractedPerson = {
   employerName?: string;
   country?: string;
   previousEmployments?: string[];
+  connectionStatus?: "connection_requested" | "accepted" | "existing_contact";
 };
 
 function cleanJsonResult(result: string) {
@@ -170,6 +171,18 @@ function countryFromContent(content?: string) {
 
   return countryFromLocation(lineValue(content, "Location"));
 }
+function linkedinConnectionStatusFromContent(content?: string) {
+  if (!content) return undefined;
+
+  const relationship = lineValue(content, "LinkedIn relationship");
+  const profileHeader = contentLines(content).slice(0, 20).join(" ");
+  const signal = relationship || profileHeader;
+
+  if (/\b1st\b/i.test(signal)) return "accepted" as const;
+  if (/\b(2nd|3rd)\b/i.test(signal)) return "connection_requested" as const;
+
+  return undefined;
+}
 const experienceEndHeadings = [
   "About",
   "Activity",
@@ -271,11 +284,14 @@ function businessNameWithCountry(employerName: string, country: string) {
 }
 
 function personFromProfileLabels(content: string): ExtractedPerson | null {
-  const profileName = lineValue(content, "Profile name");
+  const profileName = lineValue(content, "Profile name")
+    .replace(/\s*(?:\u00b7)?\s*\b(1st|2nd|3rd)\b/i, "")
+    .trim();
   const headline = lineValue(content, "Headline");
   const country = countryFromContent(content);
   const currentExperience = currentExperienceFromContent(content);
   const previousEmployments = previousExperienceSummaryFromContent(content);
+  const connectionStatus = linkedinConnectionStatusFromContent(content);
 
   if (!profileName) return null;
 
@@ -295,13 +311,14 @@ function personFromProfileLabels(content: string): ExtractedPerson | null {
       (headlineMatch ? cleanExtractedEmployer(headlineMatch[2]) || undefined : undefined),
     country: currentExperience?.country || country || undefined,
     previousEmployments: previousEmployments.length ? previousEmployments : undefined,
+    connectionStatus,
   };
 }
 
 function contentWithoutMetadata(content: string) {
   return content
     .split(/\r?\n|`n/g)
-    .filter((line) => !/^\s*(person linkedin url|profile name|headline|location|company clues|education clues):/i.test(line))
+    .filter((line) => !/^\s*(person linkedin url|profile name|headline|location|linkedin relationship|company clues|education clues):/i.test(line))
     .join(" ")
     .replace(/\s+/g, " ")
     .trim();
@@ -333,6 +350,7 @@ function nameFromSourceContent(content?: string): ExtractedPerson | null {
     jobTitle: jobTitle || undefined,
     employerName: employerName || undefined,
     country: countryFromContent(content) || undefined,
+    connectionStatus: linkedinConnectionStatusFromContent(content),
   };
 }
 
@@ -403,7 +421,7 @@ function proposalPerson(source: ResearchSourceForAnalysis, person?: ExtractedPer
     jobTitle: person.jobTitle,
     linkedinUrl,
     notes: `Captured from ${source.name}.${previousEmploymentNote}`,
-    connectionStatus: linkedinUrl ? "connection_requested" as const : undefined,
+    connectionStatus: person.connectionStatus ?? (linkedinUrl ? "connection_requested" as const : undefined),
   };
 }
 
@@ -491,6 +509,25 @@ function fallbackAnalysis(input: Input): ResearchAnalysis {
   };
 }
 
+function applySourceConnectionStatus(analysis: ResearchAnalysis, source: ResearchSourceForAnalysis) {
+  const connectionStatus = linkedinConnectionStatusFromContent(source.content);
+
+  if (!connectionStatus) return analysis;
+
+  return {
+    ...analysis,
+    proposals: analysis.proposals.map((proposal) => ({
+      ...proposal,
+      person: proposal.person
+        ? {
+            ...proposal.person,
+            connectionStatus: proposal.person.connectionStatus ?? connectionStatus,
+          }
+        : proposal.person,
+    })),
+  };
+}
+
 function normalizeAnalysis(value: unknown, fallback: ResearchAnalysis): ResearchAnalysis {
   if (!value || typeof value !== "object") return fallback;
 
@@ -557,6 +594,7 @@ Rules:
 - Prefer existing business matches over creating duplicates. Match by business name, brand, website domain, employer, and source content.
 - If a LinkedIn profile shows a person and employer, put the person in person and the employer/business in business matching fields. Never put a person LinkedIn URL in businessUpdates.website.
 - Read the LinkedIn Experience section when visible. The first experience item is current employment: role on the first line, business on the second line. Previous employers and roles belong in person notes/evidence, not as the current business.
+- Read LinkedIn relationship badges. If the profile says "1st" or "LinkedIn relationship: 1st", set person.connectionStatus to "accepted" because Aaron is already connected. If it says "2nd" or "3rd", set "connection_requested".
 - Use the LinkedIn location as country context for the business. Example: a person at Mars Wrigley with Location: Malaysia should create or match Mars Wrigley Malaysia, not generic Mars or Mars Australia.
 - If a LinkedIn URL alone does not expose employer/profile text, return needs_more_context instead of guessing or attaching to the selected business.
 - For screenshots/images, read visible LinkedIn profile text, including name, headline, current employer, location, education, and visible mutuals.
@@ -624,7 +662,7 @@ Rules:
     });
 
     const parsed = JSON.parse(cleanJsonResult(response.output_text));
-    const analysis = normalizeAnalysis(parsed, fallback);
+    const analysis = applySourceConnectionStatus(normalizeAnalysis(parsed, fallback), input.source);
 
     return analysis.proposals.length ? analysis : fallback;
   } catch (error) {
@@ -632,17 +670,4 @@ Rules:
     return fallback;
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
