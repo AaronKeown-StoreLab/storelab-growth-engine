@@ -144,6 +144,7 @@ export default function TodayBrief() {
 
           <ResearchWorkspace
             business={selectedBusiness}
+            businesses={businesses}
             onBusinessApproved={handleBusinessApproved}
           />
 
@@ -168,18 +169,20 @@ export default function TodayBrief() {
           </div>
 
           {filteredBusinesses.length ? (
-            filteredBusinesses.map((business) => (
-              <BusinessCard
-                key={business.id}
-                business={business}
-                selected={selectedBusiness?.id === business.id}
-                onOpen={() =>
-                  setSelectedBusiness((current) =>
-                    current?.id === business.id ? null : business
-                  )
-                }
-              />
-            ))
+            <div className="max-h-[32rem] space-y-3 overflow-y-auto pr-1 no-scrollbar">
+              {filteredBusinesses.map((business) => (
+                <BusinessCard
+                  key={business.id}
+                  business={business}
+                  selected={selectedBusiness?.id === business.id}
+                  onOpen={() =>
+                    setSelectedBusiness((current) =>
+                      current?.id === business.id ? null : business
+                    )
+                  }
+                />
+              ))}
+            </div>
           ) : (
             <div className="border border-white/10 p-6 text-sm text-gray-500">
               No businesses match this search.
@@ -202,3 +205,4 @@ export default function TodayBrief() {
     </section>
   );
 }
+

@@ -27,6 +27,14 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function shorten(value: string, maxLength = 220) {
+  const compact = value.replace(/\s+/g, " ").trim();
+
+  if (compact.length <= maxLength) return compact;
+
+  return `${compact.slice(0, maxLength - 1).trim()}...`;
+}
+
 export default function RelationshipDrawer({
   business,
   employment,
@@ -481,35 +489,39 @@ export default function RelationshipDrawer({
         </section>
 
         <section className="border-t border-white/10 pt-6">
-          <p className="text-xs uppercase tracking-[0.3em] text-gray-500">
-            Personal Background
-          </p>
-
-          <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs uppercase tracking-[0.3em] text-gray-500">
+              StoreLab Summary
+            </p>
             {person.evidence?.length ? (
-              person.evidence.map((item) => (
-                <div key={item.id} className="border border-white/10 bg-white/[0.02] p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-white">
-                      {item.title || "Background source"}
-                    </p>
-                    <p className="text-xs text-gray-600">
-                      {formatDate(item.capturedAt)}
+              <p className="text-xs text-gray-600">
+                {person.evidence.length} source{person.evidence.length === 1 ? "" : "s"}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="mt-4 rounded-none border border-white/10 bg-white/[0.02] p-4">
+            {person.evidence?.length ? (
+              <div className="space-y-3">
+                {person.evidence.slice(0, 3).map((item) => (
+                  <div key={item.id} className="border-l border-cyan-300/30 pl-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-white">
+                        {item.title || "Relationship signal"}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {formatDate(item.capturedAt)}
+                      </p>
+                    </div>
+                    <p className="mt-1 text-sm leading-relaxed text-gray-400">
+                      {shorten(item.content)}
                     </p>
                   </div>
-                  <p className="mt-2 text-sm leading-relaxed text-gray-400">
-                    {item.content}
-                  </p>
-                  {item.source && (
-                    <p className="mt-2 truncate text-xs text-cyan-300">
-                      {item.source}
-                    </p>
-                  )}
-                </div>
-              ))
+                ))}
+              </div>
             ) : (
               <p className="text-sm text-gray-500">
-                Add articles, posts, screenshots, or notes as sources to build this person&apos;s background.
+                Add articles, posts, screenshots, or notes as sources to build the useful background for this person.
               </p>
             )}
           </div>

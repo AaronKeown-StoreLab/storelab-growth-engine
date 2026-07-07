@@ -1,5 +1,6 @@
 "use client";
 
+import { Business } from "../types/business";
 import { ResearchProposal } from "../types/research";
 
 type PendingProposal = ResearchProposal & {
@@ -9,6 +10,7 @@ type PendingProposal = ResearchProposal & {
 
 type Props = {
   proposal: PendingProposal;
+  businesses: Business[];
   isWorking: boolean;
   onApprove: (proposal: PendingProposal) => void;
   onDelete: (proposalId: string) => void;
@@ -32,6 +34,7 @@ function confidenceLabel(value: ResearchProposal["confidence"]) {
 
 export default function ResearchProposalCard({
   proposal,
+  businesses,
   isWorking,
   onApprove,
   onDelete,
@@ -65,6 +68,43 @@ export default function ResearchProposalCard({
       person: {
         ...(proposal.person ?? {}),
         [key]: value,
+      },
+    });
+  }
+
+  function selectBusiness(businessId: string) {
+    if (!businessId) {
+      onChange({
+        ...proposal,
+        action: "create_business",
+        businessId: undefined,
+      });
+      return;
+    }
+
+    const business = businesses.find((item) => item.id === businessId);
+
+    if (!business) return;
+
+    const personName = [proposal.person?.firstName, proposal.person?.lastName]
+      .filter(Boolean)
+      .join(" ");
+
+    onChange({
+      ...proposal,
+      action: "attach_to_business",
+      businessId: business.id,
+      businessName: business.name,
+      title: personName
+        ? `Add ${personName} to ${business.name}`
+        : `Add source to ${business.name}`,
+      businessUpdates: {
+        ...(proposal.businessUpdates ?? {}),
+        name: business.name,
+        website: business.website ?? "",
+        industry: business.industry ?? "",
+        country: business.country ?? "",
+        summary: proposal.businessUpdates?.summary ?? business.summary ?? "",
       },
     });
   }
@@ -126,16 +166,22 @@ export default function ResearchProposalCard({
           <p className="text-xs uppercase text-gray-600">Business Preview</p>
 
           <div className="mt-3 space-y-2">
+            <select
+              value={proposal.action === "attach_to_business" ? proposal.businessId ?? "" : ""}
+              onChange={(event) => selectBusiness(event.target.value)}
+              className="w-full border border-cyan-300/30 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/70"
+            >
+              <option value="">Create a new business</option>
+              {businesses.map((business) => (
+                <option key={business.id} value={business.id}>
+                  {business.name}
+                </option>
+              ))}
+            </select>
             <input
               value={proposal.businessUpdates?.name ?? proposal.businessName ?? ""}
               onChange={(event) => updateBusinessField("name", event.target.value)}
               placeholder="Business name"
-              className="w-full border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600 focus:border-cyan-300/70"
-            />
-            <input
-              value={proposal.businessUpdates?.website ?? ""}
-              onChange={(event) => updateBusinessField("website", event.target.value)}
-              placeholder="Website"
               className="w-full border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600 focus:border-cyan-300/70"
             />
             <div className="grid gap-2 sm:grid-cols-2">
@@ -155,7 +201,7 @@ export default function ResearchProposalCard({
             <textarea
               value={proposal.businessUpdates?.summary ?? ""}
               onChange={(event) => updateBusinessField("summary", event.target.value)}
-              placeholder="Business summary"
+              placeholder="Why this business matters"
               rows={3}
               className="w-full resize-none border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600 focus:border-cyan-300/70"
             />
@@ -189,7 +235,7 @@ export default function ResearchProposalCard({
             <input
               value={proposal.person?.linkedinUrl ?? ""}
               onChange={(event) => updatePersonField("linkedinUrl", event.target.value)}
-              placeholder="LinkedIn URL"
+              placeholder="Person LinkedIn URL"
               className="w-full border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600 focus:border-cyan-300/70"
             />
             <input
@@ -201,7 +247,7 @@ export default function ResearchProposalCard({
             <textarea
               value={proposal.person?.notes ?? ""}
               onChange={(event) => updatePersonField("notes", event.target.value)}
-              placeholder="Customer notes"
+              placeholder="Important StoreLab context"
               rows={3}
               className="w-full resize-none border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600 focus:border-cyan-300/70"
             />

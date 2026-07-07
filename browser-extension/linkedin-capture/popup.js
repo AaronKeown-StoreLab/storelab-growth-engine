@@ -1,8 +1,18 @@
 const statusEl = document.getElementById("status");
 const captureButton = document.getElementById("capture");
+const openButton = document.getElementById("open-storelab");
+const previewEl = document.getElementById("preview");
+const previewNameEl = document.getElementById("previewName");
+const previewHeadlineEl = document.getElementById("previewHeadline");
 
 function setStatus(message) {
   statusEl.textContent = message;
+}
+
+function showPreview(payload) {
+  previewNameEl.textContent = payload.title || "LinkedIn profile";
+  previewHeadlineEl.textContent = payload.headline || payload.location || "Ready for AI review";
+  previewEl.style.display = "block";
 }
 
 async function currentTab() {
@@ -10,57 +20,43 @@ async function currentTab() {
   return tab;
 }
 
-function captureVisibleProfile() {
-  function cleanText(value) {
-    return String(value || "")
-      .replace(/\s+/g, " ")
-      .trim();
+async function requestProfileCapture(tabId) {
+  try {
+    return await chrome.tabs.sendMessage(tabId, {
+      type: "STORELAB_CAPTURE_PROFILE",
+    });
+  } catch {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content.js"],
+    });
+
+    return chrome.tabs.sendMessage(tabId, {
+      type: "STORELAB_CAPTURE_PROFILE",
+    });
+  }
+}
+
+async function postToStoreLab(payload) {
+  const response = await fetch("http://localhost:3000/api/research/captures", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "StoreLab rejected the capture.");
   }
 
-  function textFrom(selector) {
-    const element = document.querySelector(selector);
-    return cleanText(element?.innerText || element?.textContent || "");
-  }
-
-  function visibleProfileText() {
-    const main = document.querySelector("main") || document.body;
-    const sections = Array.from(main.querySelectorAll("section, header, div"))
-      .map((element) => cleanText(element.innerText || element.textContent || ""))
-      .filter((value) => value.length > 12);
-    const unique = Array.from(new Set(sections));
-
-    return unique.join("\n").slice(0, 20000);
-  }
-
-  const name =
-    textFrom("h1") ||
-    cleanText(document.title.replace(/\| LinkedIn.*/i, "")) ||
-    "LinkedIn profile";
-  const headline =
-    textFrom(".text-body-medium") ||
-    textFrom("div[data-generated-suggestion-target]");
-  const location = textFrom(".text-body-small.inline.t-black--light.break-words");
-  const content = [
-    `Profile name: ${name}`,
-    headline ? `Headline: ${headline}` : "",
-    location ? `Location: ${location}` : "",
-    "Visible LinkedIn page text:",
-    visibleProfileText(),
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return {
-    url: window.location.href,
-    title: name,
-    content,
-    capturedAt: new Date().toISOString(),
-  };
+  return data;
 }
 
 captureButton.addEventListener("click", async () => {
   captureButton.disabled = true;
-  setStatus("Reading visible LinkedIn profile...");
+  setStatus("Reading this LinkedIn profile...");
 
   try {
     const tab = await currentTab();
@@ -69,34 +65,25 @@ captureButton.addEventListener("click", async () => {
       throw new Error("Open a LinkedIn profile page first.");
     }
 
-    const [{ result: payload }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: captureVisibleProfile,
-    });
+    const result = await requestProfileCapture(tab.id);
+    const payload = result?.payload;
 
     if (!payload?.content) {
       throw new Error("Could not read this profile page.");
     }
 
-    setStatus("Sending to StoreLab...");
+    showPreview(payload);
+    setStatus("Sending profile to StoreLab...");
 
-    const storelabResponse = await fetch("http://localhost:3000/api/research/captures", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-    const data = await storelabResponse.json();
-
-    if (!storelabResponse.ok) {
-      throw new Error(data.error || "StoreLab rejected the capture.");
-    }
-
+    await postToStoreLab(payload);
     setStatus("Captured. Open StoreLab and load browser captures.");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Capture failed.");
   } finally {
     captureButton.disabled = false;
   }
+});
+
+openButton.addEventListener("click", () => {
+  void chrome.tabs.create({ url: "http://localhost:3000/" });
 });

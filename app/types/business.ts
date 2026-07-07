@@ -20,11 +20,13 @@ export type Business = {
     businessId: string;
     jobTitle?: string | null;
     isCurrent: boolean;
+    createdAt: string;
 
     person: {
       id: string;
       firstName: string;
       lastName: string;
+      createdAt: string;
       linkedinUrl?: string | null;
       email?: string | null;
       phone?: string | null;
@@ -70,3 +72,5 @@ export type Business = {
     occurredAt: string;
   }[];
 };
+
+

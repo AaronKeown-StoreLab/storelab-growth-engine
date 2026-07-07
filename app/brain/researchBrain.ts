@@ -367,7 +367,7 @@ Rules:
 - If both a new business and a person are visible, include both in one create_business proposal.
 - Prefer the employer shown in the source over the currently selected business. Never attach a person to the selected business if the source shows a different employer.
 - Prefer existing business matches over creating duplicates. Match by business name, brand, website domain, employer, and source content.
-- If a LinkedIn profile shows a person and employer, put the person in person and the employer/business in business matching fields.
+- If a LinkedIn profile shows a person and employer, put the person in person and the employer/business in business matching fields. Never put a person LinkedIn URL in businessUpdates.website.
 - If a LinkedIn URL alone does not expose employer/profile text, return needs_more_context instead of guessing or attaching to the selected business.
 - For screenshots/images, read visible LinkedIn profile text, including name, headline, current employer, location, education, and visible mutuals.
 - Keep confidence honest: low, medium, high.
@@ -442,3 +442,4 @@ Rules:
     return fallback;
   }
 }
+

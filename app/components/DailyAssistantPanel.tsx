@@ -92,15 +92,24 @@ function buildActions(businesses: Business[]) {
       );
       const days = latestInteraction ? daysSince(latestInteraction.occurredAt) : null;
 
-      if (!latestInteraction || (days !== null && days >= 21)) {
+      const relationshipAge = daysSince(employment.createdAt);
+      const personAge = daysSince(employment.person.createdAt);
+      const isFreshlyAdded = Math.min(relationshipAge, personAge) < 14;
+      const needsFollowUp = latestInteraction
+        ? days !== null && days >= 21
+        : !isFreshlyAdded && relationshipAge >= 30;
+
+      if (needsFollowUp) {
         actions.push({
           id: `follow-${business.id}-${employment.person.id}`,
-          priority: !latestInteraction || (days !== null && days >= 45) ? "High" : "Medium",
+          priority: days === null || days >= 45 ? "High" : "Medium",
           type: "Follow-up",
-          title: `You last heard from ${personName}${days !== null ? ` ${days} days ago` : " never"}`,
+          title: days !== null
+            ? `You last heard from ${personName} ${days} days ago`
+            : `${personName} has gone quiet`,
           reason: latestInteraction
             ? `Last ${latestInteraction.type}: ${latestInteraction.summary}`
-            : `${personName} is in the system but has no captured activity yet.`,
+            : `${personName} has been in the system for ${relationshipAge} days with no captured activity.`,
           business,
           personName,
           lastTouch: days !== null ? `${days} days ago` : undefined,

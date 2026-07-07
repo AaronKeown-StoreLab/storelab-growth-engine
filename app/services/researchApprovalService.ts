@@ -58,6 +58,41 @@ function businessNameFromProposal(proposal: ResearchProposal, fallbackName: stri
   );
 }
 
+function isSocialOrProfileUrl(value: string) {
+  if (!value) return false;
+
+  try {
+    const host = new URL(value).hostname.replace(/^www\./, "").toLowerCase();
+    const blockedHosts = [
+      "linkedin.com",
+      "facebook.com",
+      "instagram.com",
+      "x.com",
+      "twitter.com",
+    ];
+
+    return blockedHosts.some(
+      (blockedHost) => host === blockedHost || host.endsWith(`.${blockedHost}`)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function approvedBusinessWebsite(explicitWebsite: unknown, sourceDetail?: string) {
+  const website = cleanText(explicitWebsite);
+
+  if (website && !isSocialOrProfileUrl(website)) return website;
+
+  const sourceUrl = cleanText(sourceDetail);
+
+  if (/^https?:\/\//i.test(sourceUrl) && !isSocialOrProfileUrl(sourceUrl)) {
+    return sourceUrl;
+  }
+
+  return "";
+}
+
 export async function approveResearchSource(input: ApprovalInput) {
   if (!input.proposal) {
     throw new Error("Approval proposal is required.");
@@ -71,7 +106,7 @@ export async function approveResearchSource(input: ApprovalInput) {
   if (action === "create_business") {
     const business = await createBusiness({
       name: businessNameFromProposal(proposal, source.name),
-      website: cleanText(proposal.businessUpdates?.website) || source.detail,
+      website: approvedBusinessWebsite(proposal.businessUpdates?.website, source.detail),
       industry: cleanText(proposal.businessUpdates?.industry),
       country: cleanText(proposal.businessUpdates?.country),
       summary:
@@ -93,7 +128,7 @@ export async function approveResearchSource(input: ApprovalInput) {
     if (current) {
       await updateBusiness(businessId, {
         name: cleanText(proposal.businessUpdates.name) || current.name,
-        website: cleanText(proposal.businessUpdates.website) || current.website || "",
+        website: approvedBusinessWebsite(proposal.businessUpdates.website) || current.website || "",
         industry: cleanText(proposal.businessUpdates.industry) || current.industry || "",
         country: cleanText(proposal.businessUpdates.country) || current.country || "",
         summary: cleanText(proposal.businessUpdates.summary) || current.summary || "",
@@ -146,3 +181,4 @@ export async function approveResearchSource(input: ApprovalInput) {
 
   return business;
 }
+

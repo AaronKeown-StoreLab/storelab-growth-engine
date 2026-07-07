@@ -51,6 +51,7 @@ type BrowserCapture = {
 
 type Props = {
   business?: Business | null;
+  businesses: Business[];
   onBusinessApproved: (business: Business) => void;
 };
 
@@ -223,7 +224,7 @@ function sourceBadge(source: ResearchSource) {
   return extension ? extension.slice(0, 4).toUpperCase() : source.kind.slice(0, 4);
 }
 
-export default function ResearchWorkspace({ business, onBusinessApproved }: Props) {
+export default function ResearchWorkspace({ business, businesses, onBusinessApproved }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sources, setSources] = useState<ResearchSource[]>([]);
   const [proposals, setProposals] = useState<PendingProposal[]>([]);
@@ -717,6 +718,7 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
               <ResearchProposalCard
                 key={proposal.id}
                 proposal={proposal}
+                businesses={businesses}
                 isWorking={workingProposalId === proposal.id}
                 onApprove={approveProposal}
                 onDelete={removeProposal}
@@ -753,3 +755,4 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
     </section>
   );
 }
+
