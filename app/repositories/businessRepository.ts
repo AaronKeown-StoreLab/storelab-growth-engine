@@ -151,6 +151,33 @@ export async function addEvidenceToBusiness(data: {
   return evidence;
 }
 
+export async function addEvidenceToPerson(data: {
+  personId: string;
+  type: string;
+  title: string;
+  content: string;
+  source?: string;
+}) {
+  const evidence = await prisma.evidence.create({
+    data: {
+      personId: data.personId,
+      type: data.type,
+      title: data.title,
+      content: data.content,
+      source: data.source || null,
+    },
+  });
+
+  await prisma.timelineEvent.create({
+    data: {
+      personId: data.personId,
+      eventType: "person_background_added",
+      summary: `${data.title} was added to personal background.`,
+    },
+  });
+
+  return evidence;
+}
 export async function addPersonToBusiness(data: {
   businessId: string;
   firstName: string;

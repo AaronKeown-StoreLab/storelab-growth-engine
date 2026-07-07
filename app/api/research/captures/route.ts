@@ -1,0 +1,114 @@
+import { NextResponse } from "next/server";
+import { prisma } from "../../../lib/prisma";
+import { analyseResearchSourceRequest } from "../../../services/researchAnalysisService";
+import { ResearchAnalysis, ResearchSourceForAnalysis } from "../../../types/research";
+
+type CapturePayload = {
+  source: ResearchSourceForAnalysis;
+  analysis: ResearchAnalysis;
+};
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+function cleanText(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function captureSource(body: Record<string, unknown>): ResearchSourceForAnalysis {
+  const url = cleanText(body.url);
+  const title = cleanText(body.title) || "LinkedIn profile capture";
+  const content = cleanText(body.content);
+
+  if (!content) {
+    throw new Error("Visible profile text is required.");
+  }
+
+  return {
+    name: title,
+    kind: "Notes",
+    detail: url || title,
+    content: content.slice(0, 20000),
+    detected: ["Browser capture", url.includes("linkedin.com") ? "LinkedIn profile" : "Visible page text"].filter(Boolean),
+  };
+}
+
+function responseJson(data: unknown, init?: ResponseInit) {
+  return NextResponse.json(data, {
+    ...init,
+    headers: {
+      ...corsHeaders,
+      ...(init?.headers ?? {}),
+    },
+  });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
+export async function GET() {
+  const captures = await prisma.inboxItem.findMany({
+    where: {
+      type: "research_capture",
+      status: "pending",
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return responseJson(
+    captures.map((capture) => ({
+      id: capture.id,
+      title: capture.title,
+      summary: capture.summary,
+      createdAt: capture.createdAt,
+      payload: JSON.parse(capture.payload) as CapturePayload,
+    }))
+  );
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json()) as Record<string, unknown>;
+    const source = captureSource(body);
+    const analysis = await analyseResearchSourceRequest(source);
+    const firstProposal = analysis.proposals[0];
+
+    const capture = await prisma.inboxItem.create({
+      data: {
+        type: "research_capture",
+        status: "pending",
+        title: firstProposal?.title || source.name,
+        summary: analysis.summary,
+        payload: JSON.stringify({
+          source,
+          analysis,
+        } satisfies CapturePayload),
+      },
+    });
+
+    return responseJson({
+      id: capture.id,
+      title: capture.title,
+      summary: capture.summary,
+      analysis,
+    });
+  } catch (error) {
+    console.error("Could not save browser capture:", error);
+
+    return responseJson(
+      {
+        error: error instanceof Error ? error.message : "Could not save browser capture.",
+      },
+      { status: 400 }
+    );
+  }
+}

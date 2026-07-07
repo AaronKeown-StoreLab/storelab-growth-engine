@@ -11,9 +11,20 @@ export default function AddBusinessPanel({ onCreated }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [website, setWebsite] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [country, setCountry] = useState("");
   const [summary, setSummary] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  function resetForm() {
+    setName("");
+    setWebsite("");
+    setIndustry("");
+    setCountry("");
+    setSummary("");
+    setError(null);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,7 +38,7 @@ export default function AddBusinessPanel({ onCreated }: Props) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name, website, summary }),
+        body: JSON.stringify({ name, website, industry, country, summary }),
       });
 
       const data = await response.json();
@@ -37,9 +48,7 @@ export default function AddBusinessPanel({ onCreated }: Props) {
       }
 
       onCreated(data as Business);
-      setName("");
-      setWebsite("");
-      setSummary("");
+      resetForm();
       setIsOpen(false);
     } catch (caught) {
       setError(
@@ -55,17 +64,28 @@ export default function AddBusinessPanel({ onCreated }: Props) {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="min-h-11 border border-cyan-300/50 px-4 text-sm font-medium text-cyan-300 transition hover:bg-cyan-300 hover:text-black"
+        className="min-h-11 border border-cyan-300/50 px-4 text-left text-sm transition hover:bg-cyan-300 hover:text-black"
       >
-        Add Business
+        <span className="block font-semibold text-cyan-300">+ Add target</span>
+        <span className="mt-1 block text-xs text-gray-500">
+          Create a business manually
+        </span>
       </button>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border border-cyan-300/30 bg-cyan-300/5 p-4">
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-xs uppercase text-cyan-300">New Business</p>
+    <form
+      onSubmit={handleSubmit}
+      className="w-full border border-cyan-300/30 bg-cyan-300/5 p-4 xl:min-w-96"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase text-cyan-300">New Target Business</p>
+          <p className="mt-1 text-xs text-gray-500">
+            Create manually when the Brain has not found it yet.
+          </p>
+        </div>
 
         <button
           type="button"
@@ -96,11 +116,25 @@ export default function AddBusinessPanel({ onCreated }: Props) {
           className="min-h-11 border border-white/10 bg-black/20 px-4 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-cyan-300/70 md:col-span-2"
         />
 
+        <input
+          value={industry}
+          onChange={(event) => setIndustry(event.target.value)}
+          placeholder="Industry"
+          className="min-h-11 border border-white/10 bg-black/20 px-4 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-cyan-300/70"
+        />
+
+        <input
+          value={country}
+          onChange={(event) => setCountry(event.target.value)}
+          placeholder="Country / market"
+          className="min-h-11 border border-white/10 bg-black/20 px-4 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-cyan-300/70"
+        />
+
         <textarea
           value={summary}
           onChange={(event) => setSummary(event.target.value)}
-          placeholder="Context"
-          rows={3}
+          placeholder="Why this business matters, what to watch, or where the opportunity might be"
+          rows={4}
           className="resize-none border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-cyan-300/70 md:col-span-2"
         />
       </div>
@@ -110,20 +144,15 @@ export default function AddBusinessPanel({ onCreated }: Props) {
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button
           type="submit"
-          disabled={isSaving}
+          disabled={isSaving || !name.trim()}
           className="min-h-10 border border-cyan-300 px-4 text-sm font-medium text-cyan-300 transition hover:bg-cyan-300 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {isSaving ? "Adding..." : "Add Business"}
+          {isSaving ? "Creating..." : "Create Business"}
         </button>
 
         <button
           type="button"
-          onClick={() => {
-            setName("");
-            setWebsite("");
-            setSummary("");
-            setError(null);
-          }}
+          onClick={resetForm}
           className="min-h-10 border border-white/10 px-4 text-sm text-gray-400 transition hover:border-white/30 hover:text-white"
         >
           Clear

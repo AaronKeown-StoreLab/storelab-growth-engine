@@ -108,8 +108,37 @@ function cleanExtractedEmployer(value?: string) {
     .trim();
 }
 
+function lineValue(content: string, label: string) {
+  const line = content
+    .split(/\r?\n|`n/g)
+    .find((item) => item.toLowerCase().startsWith(`${label.toLowerCase()}:`));
+
+  return line?.slice(label.length + 1).trim() ?? "";
+}
+
+function personFromProfileLabels(content: string): ExtractedPerson | null {
+  const profileName = lineValue(content, "Profile name");
+  const headline = lineValue(content, "Headline");
+
+  if (!profileName || !headline) return null;
+
+  const nameParts = profileName.split(/\s+/).filter(Boolean);
+  const headlineMatch = headline.match(/^(.+?)\s+(?:at|with|for)\s+(.+)$/i);
+
+  if (nameParts.length < 2 || !headlineMatch) return null;
+
+  return {
+    firstName: nameParts[0],
+    lastName: nameParts.slice(1).join(" "),
+    jobTitle: cleanExtractedRole(headlineMatch[1]) || undefined,
+    employerName: cleanExtractedEmployer(headlineMatch[2]) || undefined,
+  };
+}
 function nameFromSourceContent(content?: string): ExtractedPerson | null {
   if (!content) return null;
+
+  const labelledPerson = personFromProfileLabels(content);
+  if (labelledPerson) return labelledPerson;
 
   const compact = content.replace(/\s+/g, " ").trim();
   const atMatch = compact.match(
@@ -135,6 +164,9 @@ function nameFromSourceContent(content?: string): ExtractedPerson | null {
 
 function employerFromContent(content?: string) {
   if (!content) return "";
+
+  const labelledPerson = personFromProfileLabels(content);
+  if (labelledPerson?.employerName) return labelledPerson.employerName;
 
   const compact = content.replace(/\s+/g, " ").trim();
   const match = compact.match(
@@ -328,6 +360,9 @@ ${JSON.stringify({ ...input.source, imageDataUrl: input.source.imageDataUrl ? "[
 
 Rules:
 - If the source is about a person/customer at an existing business, propose attach_to_business with the existing businessId and a person object.
+- Evaluate fit for StoreLab: retail, supermarkets, convenience, QSR, FMCG, shopper marketing, franchise, store operations, growth, loyalty, category, merchandising, digital, or decision-maker roles are stronger fits.
+- Put the fit reasoning and recommended next action in the proposal description and/or person notes, including whether Aaron should connect, message, or hold off.
+- If the source is an article, website post, award, announcement, interview, or good-news story about a person, preserve the useful facts in evidenceContent so approval adds it to their personal background.
 - If the source identifies a new employer/business, propose create_business with businessUpdates and include the person if visible.
 - If both a new business and a person are visible, include both in one create_business proposal.
 - Prefer the employer shown in the source over the currently selected business. Never attach a person to the selected business if the source shows a different employer.

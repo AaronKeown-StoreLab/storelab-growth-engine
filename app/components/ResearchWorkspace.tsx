@@ -30,11 +30,23 @@ type ResearchSource = {
   content?: string;
   imageDataUrl?: string;
   mimeType?: string;
+  captureId?: string;
 };
 
 type PendingProposal = ResearchProposal & {
   id: string;
   sourceId: string;
+  captureId?: string;
+};
+
+type BrowserCapture = {
+  id: string;
+  title: string;
+  summary?: string | null;
+  payload: {
+    source: Omit<ResearchSource, "id" | "origin" | "capturedAt">;
+    analysis: ResearchAnalysis;
+  };
 };
 
 type Props = {
@@ -174,7 +186,9 @@ function sourceFromUrl(value: string, origin: SourceOrigin): ResearchSource {
       hour: "2-digit",
       minute: "2-digit",
     }),
-    detected: detectedFor("Website"),
+    detected: parsed.hostname.includes("linkedin.com")
+      ? ["URL captured", "Browser capture recommended"]
+      : detectedFor("Website"),
   };
 }
 
@@ -218,6 +232,7 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
   const [notice, setNotice] = useState<string | null>(null);
   const [workingProposalId, setWorkingProposalId] = useState<string | null>(null);
   const [analysingSourceIds, setAnalysingSourceIds] = useState<string[]>([]);
+  const [isLoadingCaptures, setIsLoadingCaptures] = useState(false);
 
   const sourceMix = useMemo(() => {
     const counts = sources.reduce<Record<ResearchSourceKind, number>>((current, source) => {
@@ -374,6 +389,11 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
       }
 
       onBusinessApproved(data.business as Business);
+      if (source.captureId) {
+        void fetch(`/api/research/captures/${source.captureId}`, {
+          method: "DELETE",
+        });
+      }
       setProposals((current) =>
         current.filter((item) => item.sourceId !== proposal.sourceId)
       );
@@ -449,6 +469,53 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
       current.filter((proposal) => proposal.id !== proposalId)
     );
   }
+
+  async function loadBrowserCaptures() {
+    setIsLoadingCaptures(true);
+    setNotice(null);
+
+    try {
+      const response = await fetch("/api/research/captures");
+      const captures = (await response.json()) as BrowserCapture[] | { error?: string };
+
+      if (!response.ok || !Array.isArray(captures)) {
+        throw new Error("error" in captures ? captures.error : "Could not load browser captures.");
+      }
+
+      const capturedAt = new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      const nextSources: ResearchSource[] = captures.map((capture) => ({
+        ...capture.payload.source,
+        id: `capture-${capture.id}`,
+        origin: "url",
+        capturedAt,
+        captureId: capture.id,
+      }));
+      const nextProposals: PendingProposal[] = captures.flatMap((capture) =>
+        capture.payload.analysis.proposals.map((proposal) => ({
+          ...proposal,
+          id: makeId(),
+          sourceId: `capture-${capture.id}`,
+          captureId: capture.id,
+        }))
+      );
+
+      setSources((current) => [...nextSources, ...current]);
+      setProposals((current) => [...nextProposals, ...current]);
+      setNotice(
+        captures.length
+          ? `${captures.length} browser capture${captures.length === 1 ? "" : "s"} loaded for review.`
+          : "No browser captures waiting yet."
+      );
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "Could not load browser captures.");
+    } finally {
+      setIsLoadingCaptures(false);
+    }
+  }
+
   function removeSource(id: string) {
     setSources((current) => current.filter((source) => source.id !== id));
     setProposals((current) => current.filter((proposal) => proposal.sourceId !== id));
@@ -531,6 +598,15 @@ export default function ResearchWorkspace({ business, onBusinessApproved }: Prop
           className="min-h-11 border border-white/10 px-5 text-sm font-medium text-gray-200 transition hover:border-cyan-300/60 hover:text-cyan-300"
         >
           Add Link
+        </button>
+
+        <button
+          type="button"
+          onClick={loadBrowserCaptures}
+          disabled={isLoadingCaptures}
+          className="min-h-11 border border-cyan-300/40 px-5 text-sm font-medium text-cyan-300 transition hover:bg-cyan-300 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isLoadingCaptures ? "Loading..." : "Load Browser Captures"}
         </button>
       </form>
 

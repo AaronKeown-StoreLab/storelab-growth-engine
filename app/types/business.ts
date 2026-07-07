@@ -29,6 +29,14 @@ export type Business = {
       email?: string | null;
       phone?: string | null;
       notes?: string | null;
+      evidence: {
+        id: string;
+        type: string;
+        title?: string | null;
+        content: string;
+        source?: string | null;
+        capturedAt: string;
+      }[];
     };
   }[];
 

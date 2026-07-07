@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "StoreLab LinkedIn Capture",
+  "version": "0.1.0",
+  "description": "Capture visible LinkedIn profile evidence into StoreLab OS for AI review.",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "http://localhost:3000/*"
+  ],
+  "action": {
+    "default_title": "Capture to StoreLab",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/in/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

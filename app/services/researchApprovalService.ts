@@ -1,5 +1,6 @@
 import {
   addEvidenceToBusiness,
+  addEvidenceToPerson,
   addPersonToBusiness,
   createBusiness,
   getBusinessById,
@@ -102,9 +103,10 @@ export async function approveResearchSource(input: ApprovalInput) {
 
   const personFirstName = cleanText(proposal.person?.firstName);
   const personLastName = cleanText(proposal.person?.lastName);
+  let approvedPersonId = "";
 
   if (personFirstName && personLastName) {
-    await addPersonToBusiness({
+    const approvedPerson = await addPersonToBusiness({
       businessId,
       firstName: personFirstName,
       lastName: personLastName,
@@ -113,16 +115,29 @@ export async function approveResearchSource(input: ApprovalInput) {
       email: cleanText(proposal.person?.email),
       notes: cleanText(proposal.person?.notes),
     });
+    approvedPersonId = approvedPerson.id;
   }
+
+  const evidenceTitle = cleanText(proposal.evidenceTitle) || source.name;
+  const evidenceContent = cleanText(proposal.evidenceContent) || source.content || source.name;
 
   await addEvidenceToBusiness({
     businessId,
     type: source.kind.toLowerCase(),
-    title: cleanText(proposal.evidenceTitle) || source.name,
-    content: cleanText(proposal.evidenceContent) || source.content || source.name,
+    title: evidenceTitle,
+    content: evidenceContent,
     source: source.detail,
   });
 
+  if (approvedPersonId) {
+    await addEvidenceToPerson({
+      personId: approvedPersonId,
+      type: source.kind.toLowerCase(),
+      title: evidenceTitle,
+      content: evidenceContent,
+      source: source.detail,
+    });
+  }
   const business = await getBusinessById(businessId);
 
   if (!business) {

@@ -482,6 +482,40 @@ export default function RelationshipDrawer({
 
         <section className="border-t border-white/10 pt-6">
           <p className="text-xs uppercase tracking-[0.3em] text-gray-500">
+            Personal Background
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {person.evidence?.length ? (
+              person.evidence.map((item) => (
+                <div key={item.id} className="border border-white/10 bg-white/[0.02] p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-white">
+                      {item.title || "Background source"}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {formatDate(item.capturedAt)}
+                    </p>
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed text-gray-400">
+                    {item.content}
+                  </p>
+                  {item.source && (
+                    <p className="mt-2 truncate text-xs text-cyan-300">
+                      {item.source}
+                    </p>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-gray-500">
+                Add articles, posts, screenshots, or notes as sources to build this person&apos;s background.
+              </p>
+            )}
+          </div>
+        </section>
+        <section className="border-t border-white/10 pt-6">
+          <p className="text-xs uppercase tracking-[0.3em] text-gray-500">
             Employment History
           </p>
 
