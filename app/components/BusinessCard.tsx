@@ -51,8 +51,9 @@ export default function BusinessCard({
         </h3>
 
         <p className="mt-2 text-sm text-gray-400">
-          {[business.industry, business.country].filter(Boolean).join(" • ") ||
-            "Business intelligence"}
+          {[business.industry, business.country]
+            .filter(Boolean)
+            .join(" • ") || "Business intelligence"}
         </p>
       </div>
 
@@ -65,7 +66,7 @@ export default function BusinessCard({
       </div>
 
       <div className="mt-6 border-t border-white/10 pt-5">
-        <ul className="space-y-2 text-sm leading-relaxed text-gray-400">
+        <ul className="space-y-2 text-sm text-gray-400">
           {primaryRelationship && (
             <li>
               • Relationship: {primaryRelationship.person.firstName}{" "}
