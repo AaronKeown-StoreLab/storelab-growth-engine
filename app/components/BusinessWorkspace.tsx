@@ -16,7 +16,7 @@ type Props = {
 
 export default function BusinessWorkspace({ business, onChanged, onDeleted }: Props) {
   return (
-    <div className="h-full overflow-y-auto pr-2 no-scrollbar">
+    <div className="space-y-5">
       <BusinessHeader
         key={business.id}
         business={business}

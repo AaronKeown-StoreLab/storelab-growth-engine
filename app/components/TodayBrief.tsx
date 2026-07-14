@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import InboxPanel from "./InboxPanel";
 import QuickQuestion from "./QuickQuestion";
 import ResearchWorkspace from "./ResearchWorkspace";
 import AddBusinessPanel from "./AddBusinessPanel";
@@ -131,8 +130,8 @@ export default function TodayBrief() {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="no-scrollbar min-h-0 space-y-5 overflow-y-auto pr-2">
+      <div className="min-h-0 flex-1">
+        <div className="no-scrollbar mx-auto min-h-0 max-h-full w-full max-w-5xl space-y-5 overflow-y-auto pr-2">
           <LinkedInPursuitPanel onSaved={refreshBusinesses} />
 
           <DailyAssistantPanel
@@ -149,6 +148,13 @@ export default function TodayBrief() {
             onBusinessApproved={handleBusinessApproved}
           />
 
+          {selectedBusiness && (
+            <BusinessWorkspace
+              business={selectedBusiness}
+              onChanged={refreshBusinesses}
+              onDeleted={handleBusinessDeleted}
+            />
+          )}
           <div className="sticky top-0 z-10 border border-white/10 bg-[#05080D]/95 p-4 backdrop-blur">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
               <div className="min-w-0 flex-1">
@@ -191,20 +197,8 @@ export default function TodayBrief() {
           )}
         </div>
 
-        <div className="min-h-0 border-l border-white/10 pl-8">
-          {selectedBusiness ? (
-            <BusinessWorkspace
-              business={selectedBusiness}
-              onChanged={refreshBusinesses}
-              onDeleted={handleBusinessDeleted}
-            />
-          ) : (
-            <InboxPanel />
-          )}
-        </div>
       </div>
     </section>
   );
 }
-
 
