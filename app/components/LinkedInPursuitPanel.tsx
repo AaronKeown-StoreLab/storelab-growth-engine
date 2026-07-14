@@ -41,8 +41,8 @@ function fieldClass(extra = "") {
 
 function buttonClass(tone: "primary" | "quiet" = "quiet") {
   return tone === "primary"
-    ? "min-h-10 border border-cyan-300 px-4 text-sm font-medium text-cyan-300 transition hover:bg-cyan-300 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
-    : "min-h-10 border border-white/10 px-4 text-sm text-gray-400 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40";
+    ? "min-h-11 border border-cyan-300 bg-cyan-300 px-4 text-sm font-semibold text-black transition hover:bg-transparent hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+    : "min-h-11 border border-white/10 px-4 text-sm text-gray-400 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40";
 }
 
 function updatePerson(
@@ -153,7 +153,7 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
 
       const nextAnalysis = data as PursuitCaptureAnalysis;
       setAnalysis(nextAnalysis);
-      setNotice("Review the memory before saving it.");
+      setNotice("Preview ready. Check the details below, then save only if it is right.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not review that LinkedIn note.");
     } finally {
@@ -186,7 +186,7 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
       setPursuits((current) => [data.pursuit!, ...current.filter((item) => item.id !== data.pursuit!.id)]);
       setAnalysis(null);
       setNote("");
-      setNotice("Saved. StoreLab remembers where this LinkedIn thread is up to.");
+      setNotice("Saved. StoreLab has added this relationship memory.");
       onSaved();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not save this LinkedIn pursuit.");
@@ -201,9 +201,9 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase text-cyan-300">LinkedIn Pursuit</p>
-          <h2 className="mt-1 text-xl font-semibold text-white">What happened on LinkedIn?</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            One rough sentence is enough. StoreLab will turn it into memory and a next step.
+          <h2 className="mt-1 text-xl font-semibold text-white">Capture a LinkedIn relationship</h2>
+          <p className="mt-1 max-w-2xl text-sm text-gray-500">
+            Paste a profile line, screenshot text, or a rough note. StoreLab will analyse it and show a preview. Nothing is saved until you approve it.
           </p>
         </div>
         <div className="border border-white/10 bg-black/20 px-3 py-2 text-right">
@@ -212,13 +212,13 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto]">
+      <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_12rem]">
         <textarea
           ref={noteRef}
           value={note}
           onChange={(event) => setNote(event.target.value)}
           rows={3}
-          placeholder="Sent Chris Allan at Lion a connection request mentioning our Lion NZ history."
+          placeholder="Example: Stefan Veljanoski is Marketing Manager at 7-Eleven Australia in Melbourne. Worth reviewing for a StoreLab demo."
           className="resize-none border border-white/10 bg-black/30 px-4 py-3 text-sm leading-relaxed text-white outline-none placeholder:text-gray-600 focus:border-cyan-300/70"
         />
         <button
@@ -229,20 +229,25 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
           }}
           onClick={() => void reviewNote()}
           disabled={isReviewing}
-          className={`${buttonClass("primary")} lg:w-32`}
+          className={buttonClass("primary")}
         >
-          {isReviewing ? "Reading..." : "Review"}
+          {isReviewing ? "Analysing..." : "Analyse & preview"}
         </button>
       </div>
 
-      {notice && <p className="mt-3 text-sm text-cyan-200">{notice}</p>}
+      {notice && (
+        <div className="mt-3 border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-sm text-cyan-100">
+          {notice}
+        </div>
+      )}
 
       {analysis && (
         <div className="mt-4 border border-white/10 bg-black/20 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-medium uppercase text-gray-600">Confirm before saving</p>
-              <h3 className="mt-1 text-lg font-semibold text-white">{analysis.whatChanged}</h3>
+              <p className="text-xs font-medium uppercase text-cyan-300">Preview only - not saved yet</p>
+              <h3 className="mt-1 text-lg font-semibold text-white">StoreLab found this relationship</h3>
+              <p className="mt-2 text-sm leading-relaxed text-gray-400">{analysis.whatChanged}</p>
             </div>
             <span className="border border-white/10 px-2 py-1 text-xs text-gray-500">
               {analysis.confidence} confidence
@@ -342,10 +347,10 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
               disabled={isSaving}
               className={buttonClass("primary")}
             >
-              {isSaving ? "Saving..." : "Save"}
+              {isSaving ? "Saving..." : "Approve & save"}
             </button>
             <button type="button" onClick={() => setAnalysis(null)} disabled={isSaving} className={buttonClass()}>
-              Ignore
+              Ignore preview
             </button>
           </div>
         </div>
@@ -404,5 +409,6 @@ function PursuitColumn({
     </div>
   );
 }
+
 
 
