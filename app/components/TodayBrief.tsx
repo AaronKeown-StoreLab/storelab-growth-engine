@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import QuickQuestion from "./QuickQuestion";
-import ResearchWorkspace from "./ResearchWorkspace";
 import AddBusinessPanel from "./AddBusinessPanel";
 import BusinessCard from "./BusinessCard";
 import BusinessWorkspace from "./BusinessWorkspace";
@@ -142,12 +141,6 @@ export default function TodayBrief() {
             }}
           />
 
-          <ResearchWorkspace
-            business={selectedBusiness}
-            businesses={businesses}
-            onBusinessApproved={handleBusinessApproved}
-          />
-
           {selectedBusiness && (
             <BusinessWorkspace
               business={selectedBusiness}
@@ -201,4 +194,3 @@ export default function TodayBrief() {
     </section>
   );
 }
-
