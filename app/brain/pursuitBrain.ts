@@ -1,4 +1,4 @@
-import { getOpenAIClient } from "./ai/openai";
+﻿import { getOpenAIClient } from "./ai/openai";
 import { PursuitCaptureAnalysis, PursuitStage } from "../types/pursuit";
 
 const stages: PursuitStage[] = [
@@ -68,7 +68,7 @@ function inferStage(note: string): PursuitStage {
   if (/demo proposed|suggested.*demo|proposed.*demo|open to seeing|quick demo|teams demo/.test(lower)) return "Demo Proposed";
   if (/replied|responded|asked for|positive|interested/.test(lower)) return "Replied";
   if (/follow.?up sent|sent .*follow/.test(lower)) return "Follow-up Sent";
-  if (/accepted|connected/.test(lower)) return "Connected";
+  if (/accepted|already connected|\b1st\b/.test(lower)) return "Connected";
   if (/sent .*connection|connection request sent|sent .*request/.test(lower)) return "Connection Sent";
   if (/draft|prepared/.test(lower)) return "Message Drafted";
 
@@ -142,27 +142,175 @@ function extractLinkedInUrl(note: string) {
   return note.match(/https?:\/\/[^\s]+linkedin\.com\/[^\s]+/i)?.[0];
 }
 
+type ExtractedProfile = {
+  personName: string;
+  businessName: string;
+  role?: string;
+  location?: string;
+};
+
+const countryWords = [
+  "Australia",
+  "Malaysia",
+  "New Zealand",
+  "United Kingdom",
+  "Singapore",
+  "Indonesia",
+  "Thailand",
+  "Vietnam",
+  "Philippines",
+  "United States",
+  "Canada",
+];
+
 function cleanBusinessName(value: string) {
   return cleanText(value)
     .replace(/\s+(?:a\s+)?linkedin\b.*$/i, "")
-    .replace(/\s+(?:after|because|mention(?:ing|ed)?|about|who|that|where)\b.*$/i, "")
+    .replace(/\s+(?:after|because|mention(?:ing|ed)?|about|who|that|where|worth|already)\b.*$/i, "")
     .replace(/\s+-\s+.*$/, "")
+    .replace(/\s+\d+(?:st|nd|rd|th)?\b.*$/i, "")
     .replace(/[.!,]$/, "")
     .trim();
 }
 
-function extractPersonAndBusiness(note: string, context: Context) {
-  const actionPrefix = "(?:found|sent|asked|messaged|connected with|demo booked with|followed up with|replied to)";
-  const personPattern = "([A-Z][A-Za-z'-]+(?:\\s+[A-Z][A-Za-z'-]+){0,3})";
-  const businessPattern = "([A-Z][A-Za-z0-9&.' -]{1,80}?)(?=\\s+(?:a\\s+)?linkedin\\b|\\s+(?:after|because|mention(?:ing|ed)?|about|who|that|where)\\b|\\s+-\\s+|[.!,]|$)";
-  const directMatch = note.match(new RegExp(`^\\s*${actionPrefix}?\\s*${personPattern}\\s+(?:at|from|with)\\s+${businessPattern}`, "i"));
-  const acceptedMatch = note.match(/([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){0,3})\s+from\s+([A-Z][A-Za-z0-9&.' -]{1,60})\s+(?:accepted|replied|responded)/);
+function cleanPersonName(value: string) {
+  return cleanText(value)
+    .replace(/\b(?:1st|2nd|3rd)\b.*$/i, "")
+    .replace(/\b(?:Connect|Message|Follow|Contact info)\b.*$/i, "")
+    .replace(/[^A-Za-z' -]/g, "")
+    .trim();
+}
 
+function locationCountry(location?: string) {
+  const cleaned = cleanText(location);
+
+  if (!cleaned) return "";
+
+  const direct = countryWords.find((country) => new RegExp(`\\b${country}\\b`, "i").test(cleaned));
+
+  if (direct) return direct;
+
+  const parts = cleaned.split(",").map((part) => part.trim()).filter(Boolean);
+  return parts.at(-1) ?? "";
+}
+
+function hasCountryMarker(company: string) {
+  return /\b(?:AU|ANZ|Australia|Malaysia|New Zealand|United Kingdom|UK|Singapore|Indonesia|Thailand|Vietnam|Philippines|United States|USA|Canada)\b/i.test(company);
+}
+
+function withLocationSuffix(company: string, location?: string) {
+  const cleanedCompany = cleanBusinessName(company);
+  const country = locationCountry(location);
+
+  if (!cleanedCompany || !country || hasCountryMarker(cleanedCompany)) return cleanedCompany;
+
+  return `${cleanedCompany} ${country}`;
+}
+
+function isNoiseLine(line: string) {
+  return /^(?:contact info|connect|message|follow|more|highlights|activity|experience|education|licenses|volunteering|show all|people you may know|more profiles for you)$/i.test(line) ||
+    /(?:contact info|connections|mutual connection|followers|recent posts|verification|verified)/i.test(line);
+}
+
+function linkedinLines(note: string) {
+  return note
+    .split(/\r?\n|\s{2,}/)
+    .map((line) => cleanText(line).replace(/\s+(?:·|-|�)\s*(?:Contact info|1st|2nd|3rd).*$/i, ""))
+    .filter((line) => line && !isNoiseLine(line));
+}
+
+function parseRoleBusinessLocation(value: string) {
+  const headline = cleanText(value).replace(/\s+·\s+.*$/, "");
+  const atMatch = headline.match(/^(.{2,90}?)\s+at\s+(.{2,90}?)(?:\s+(Greater [A-Z][A-Za-z ,]+|[A-Z][A-Za-z]+,\s*[A-Z][A-Za-z ,]+|Malaysia|Australia|Singapore|New Zealand|United Kingdom))?$/i);
+
+  if (atMatch) {
+    return {
+      role: cleanText(atMatch[1]),
+      businessName: withLocationSuffix(atMatch[2], atMatch[3]),
+      location: cleanText(atMatch[3]),
+    };
+  }
+
+  const commaMatch = headline.match(/^(.{2,80}?),\s+(.{2,90})$/);
+
+  if (commaMatch) {
+    return {
+      role: cleanText(commaMatch[1]),
+      businessName: cleanBusinessName(commaMatch[2]),
+    };
+  }
+
+  return undefined;
+}
+
+function looksLikeNameLine(line: string) {
+  const cleaned = cleanPersonName(line);
+  const words = cleaned.split(/\s+/).filter(Boolean);
+
+  return words.length >= 2 && words.length <= 4 && words.every((word) => /^[A-Z][A-Za-z'-]+$/.test(word));
+}
+
+function extractFromLinkedInLines(note: string): ExtractedProfile | undefined {
+  const lines = linkedinLines(note);
+  const nameIndex = lines.findIndex((line) => looksLikeNameLine(line));
+
+  if (nameIndex < 0) return undefined;
+
+  const personName = cleanPersonName(lines[nameIndex]);
+  const headline = lines[nameIndex + 1] ?? "";
+  const parsedHeadline = parseRoleBusinessLocation(headline);
+
+  if (personName && parsedHeadline?.businessName) {
+    const nextLocation = /^[A-Z][A-Za-z ,]+$/.test(lines[nameIndex + 2] ?? "") ? lines[nameIndex + 2] : parsedHeadline.location;
+
+    return {
+      personName,
+      businessName: withLocationSuffix(parsedHeadline.businessName, nextLocation),
+      role: parsedHeadline.role,
+      location: nextLocation,
+    };
+  }
+
+  const role = lines.find((line, index) => index > nameIndex && !isNoiseLine(line) && !/\b(?:Present|yrs?|mos?)\b/i.test(line));
+  const business = role ? lines[lines.indexOf(role) + 1] : undefined;
+
+  if (personName && role && business) {
+    return {
+      personName,
+      businessName: cleanBusinessName(business),
+      role,
+    };
+  }
+
+  return undefined;
+}
+
+function extractPersonAndBusiness(note: string, context: Context): ExtractedProfile {
+  const namePattern = "([A-Z][A-Za-z'-]+(?:\\s+[A-Z][A-Za-z'-]+){1,3})";
+  const businessPattern = "([A-Za-z0-9][A-Za-z0-9&.' -]{1,90}?)(?=\\s+(?:a\\s+)?linkedin\\b|\\s+(?:after|because|mention(?:ing|ed)?|about|who|that|where|worth|already)\\b|\\s+-\\s+|[.!,]|$)";
+  const isRoleMatch = note.match(new RegExp(`^\\s*${namePattern}\\s+is\\s+(.{2,90}?)\\s+at\\s+(.+?)(?:\\s+in\\s+([^.;]+))?(?:[.;]|$)`, "i"));
+
+  if (isRoleMatch) {
+    return {
+      personName: cleanPersonName(isRoleMatch[1]),
+      role: cleanText(isRoleMatch[2]),
+      businessName: withLocationSuffix(isRoleMatch[3], isRoleMatch[4]),
+      location: cleanText(isRoleMatch[4]),
+    };
+  }
+
+  const linkedinProfile = extractFromLinkedInLines(note);
+
+  if (linkedinProfile) return linkedinProfile;
+
+  const actionPrefix = "(?:found|sent|asked|messaged|connected with|demo booked with|followed up with|replied to)";
+  const directMatch = note.match(new RegExp(`^\\s*${actionPrefix}?\\s*${namePattern}\\s+(?:at|from|with)\\s+${businessPattern}`, "i"));
+  const acceptedMatch = note.match(/([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,3})\s+from\s+([A-Z][A-Za-z0-9&.' -]{1,60})\s+(?:accepted|replied|responded)/);
   const match = directMatch ?? acceptedMatch;
 
   if (match) {
     return {
-      personName: cleanText(match[1]),
+      personName: cleanPersonName(match[1]),
       businessName: cleanBusinessName(match[2]),
     };
   }
@@ -184,20 +332,21 @@ function extractPersonAndBusiness(note: string, context: Context) {
     businessName: business?.name ?? "Unknown company",
   };
 }
-
 function angleFromNote(note: string) {
   const mentioning = note.match(/mention(?:ing|ed)?\s+(.+?)(?:\.|$)/i)?.[1];
   const because = note.match(/because\s+(.+?)(?:\.|$)/i)?.[1];
   const relevant = note.match(/relevant\s+because\s+(.+?)(?:\.|$)/i)?.[1];
+  const storeLab = note.match(/(?:worth reviewing for|useful for|good fit for|StoreLab|demo|retail execution).+?(?:\.|$)/i)?.[0];
 
-  return cleanText(mentioning ?? relevant ?? because ?? "");
+  return cleanText(mentioning ?? relevant ?? because ?? storeLab ?? "");
 }
 
 export function fallbackPursuitAnalysis(note: string, context: Context): PursuitCaptureAnalysis {
   const cleaned = cleanText(note);
   const stage = inferStage(cleaned);
   const teaserVideoSent = /teaser|video/.test(cleaned.toLowerCase());
-  const { personName, businessName } = extractPersonAndBusiness(cleaned, context);
+  const extracted = extractPersonAndBusiness(note, context);
+  const { personName, businessName } = extracted;
   const person = splitName(personName);
   const storeLabAngle = angleFromNote(cleaned);
   const nextAction = nextActionForStage(stage, teaserVideoSent);
@@ -208,6 +357,7 @@ export function fallbackPursuitAnalysis(note: string, context: Context): Pursuit
     person: {
       firstName: person.firstName,
       lastName: person.lastName,
+      role: extracted.role,
       linkedinUrl: extractLinkedInUrl(cleaned),
     },
     business: {
@@ -348,5 +498,12 @@ Return ONLY JSON with this shape:
     return fallback;
   }
 }
+
+
+
+
+
+
+
 
 

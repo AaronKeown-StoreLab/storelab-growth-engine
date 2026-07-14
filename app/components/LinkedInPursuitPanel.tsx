@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   PursuitCaptureAnalysis,
   PursuitListItem,
@@ -78,6 +78,9 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const [isReviewing, setIsReviewing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const noteRef = useRef<HTMLTextAreaElement | null>(null);
+  const reviewInFlightRef = useRef(false);
+  const saveInFlightRef = useRef(false);
 
   async function loadPursuits() {
     const response = await fetch("/api/pursuits");
@@ -121,13 +124,16 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
   const recent = pursuits.slice(0, 5);
 
   async function reviewNote() {
-    const trimmed = note.trim();
+    if (reviewInFlightRef.current) return;
+
+    const trimmed = note.trim() || noteRef.current?.value.trim() || "";
 
     if (!trimmed) {
       setNotice("Tell StoreLab what happened on LinkedIn first.");
       return;
     }
 
+    reviewInFlightRef.current = true;
     setIsReviewing(true);
     setNotice(null);
 
@@ -151,13 +157,15 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not review that LinkedIn note.");
     } finally {
+      reviewInFlightRef.current = false;
       setIsReviewing(false);
     }
   }
 
   async function saveAnalysis() {
-    if (!analysis) return;
+    if (!analysis || saveInFlightRef.current) return;
 
+    saveInFlightRef.current = true;
     setIsSaving(true);
     setNotice(null);
 
@@ -183,6 +191,7 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not save this LinkedIn pursuit.");
     } finally {
+      saveInFlightRef.current = false;
       setIsSaving(false);
     }
   }
@@ -205,6 +214,7 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
 
       <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto]">
         <textarea
+          ref={noteRef}
           value={note}
           onChange={(event) => setNote(event.target.value)}
           rows={3}
@@ -213,7 +223,11 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
         />
         <button
           type="button"
-          onClick={reviewNote}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            void reviewNote();
+          }}
+          onClick={() => void reviewNote()}
           disabled={isReviewing}
           className={`${buttonClass("primary")} lg:w-32`}
         >
@@ -318,7 +332,16 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
           </label>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" onClick={saveAnalysis} disabled={isSaving} className={buttonClass("primary")}>
+            <button
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                void saveAnalysis();
+              }}
+              onClick={() => void saveAnalysis()}
+              disabled={isSaving}
+              className={buttonClass("primary")}
+            >
               {isSaving ? "Saving..." : "Save"}
             </button>
             <button type="button" onClick={() => setAnalysis(null)} disabled={isSaving} className={buttonClass()}>
@@ -381,4 +404,5 @@ function PursuitColumn({
     </div>
   );
 }
+
 
