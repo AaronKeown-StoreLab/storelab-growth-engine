@@ -13,6 +13,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
+      <head>
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="/pursuit-runtime.js" />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

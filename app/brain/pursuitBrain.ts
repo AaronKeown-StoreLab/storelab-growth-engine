@@ -166,6 +166,7 @@ const countryWords = [
 function cleanBusinessName(value: string) {
   return cleanText(value)
     .replace(/\s+(?:a\s+)?linkedin\b.*$/i, "")
+    .replace(/\s+(?:a\s+)?(?:connection request|request|message|follow-?up)\b.*$/i, "")
     .replace(/\s+(?:after|because|mention(?:ing|ed)?|about|who|that|where|worth|already)\b.*$/i, "")
     .replace(/\s+-\s+.*$/, "")
     .replace(/\s+\d+(?:st|nd|rd|th)?\b.*$/i, "")
@@ -215,7 +216,7 @@ function isNoiseLine(line: string) {
 function linkedinLines(note: string) {
   return note
     .split(/\r?\n|\s{2,}/)
-    .map((line) => cleanText(line).replace(/\s+(?:·|-|�)\s*(?:Contact info|1st|2nd|3rd).*$/i, ""))
+    .map((line) => cleanText(line).replace(/\s+(?:\u00B7|-|\uFFFD)\s*(?:Contact info|1st|2nd|3rd).*$/i, ""))
     .filter((line) => line && !isNoiseLine(line));
 }
 
@@ -287,7 +288,7 @@ function extractFromLinkedInLines(note: string): ExtractedProfile | undefined {
 
 function extractPersonAndBusiness(note: string, context: Context): ExtractedProfile {
   const namePattern = "([A-Z][A-Za-z'-]+(?:\\s+[A-Z][A-Za-z'-]+){1,3})";
-  const businessPattern = "([A-Za-z0-9][A-Za-z0-9&.' -]{1,90}?)(?=\\s+(?:a\\s+)?linkedin\\b|\\s+(?:after|because|mention(?:ing|ed)?|about|who|that|where|worth|already)\\b|\\s+-\\s+|[.!,]|$)";
+  const businessPattern = "([A-Za-z0-9][A-Za-z0-9&.' -]{1,90}?)(?=\\s+(?:a\\s+)?(?:linkedin|connection request|request|message|follow-?up)\\b|\\s+(?:after|because|mention(?:ing|ed)?|about|who|that|where|worth|already)\\b|\\s+-\\s+|[.!,]|$)";
   const isRoleMatch = note.match(new RegExp(`^\\s*${namePattern}\\s+is\\s+(.{2,90}?)\\s+at\\s+(.+?)(?:\\s+in\\s+([^.;]+))?(?:[.;]|$)`, "i"));
 
   if (isRoleMatch) {
@@ -498,6 +499,10 @@ Return ONLY JSON with this shape:
     return fallback;
   }
 }
+
+
+
+
 
 
 

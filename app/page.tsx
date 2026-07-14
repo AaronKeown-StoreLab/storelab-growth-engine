@@ -1,14 +1,17 @@
-"use client";
+import PursuitHome from "./components/pursuit/PursuitHome";
+import { listLinkedInPursuits } from "./services/pursuitCaptureService";
 
-import TodayBrief from "./components/TodayBrief";
+export const dynamic = "force-dynamic";
 
-export default function Home() {
+export default async function Home() {
+  const pursuits = await listLinkedInPursuits();
+
   return (
-    <main className="min-h-screen bg-[#05080D] text-white">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,#17415B_0%,transparent_35%),radial-gradient(circle_at_bottom_right,#0E2938_0%,transparent_35%)]" />
+    <main className="min-h-screen bg-[#05070A] text-white">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,#10212A_0%,transparent_36%)]" />
 
-      <div className="relative mx-auto max-w-7xl px-8 py-8">
-        <TodayBrief />
+      <div className="relative mx-auto min-h-screen max-w-6xl px-5 py-6 sm:px-8 lg:py-10">
+        <PursuitHome initialPursuits={pursuits} />
       </div>
     </main>
   );
