@@ -30,6 +30,77 @@
       .replace(/"/g, "&quot;");
   }
 
+  function splitFullName(value) {
+    const parts = String(value || "").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return { firstName: "", lastName: "" };
+
+    return {
+      firstName: parts[0],
+      lastName: parts.slice(1).join(" "),
+    };
+  }
+
+  function quotedTextParts(value) {
+    const source = String(value || "");
+    const segments = [];
+    let template = "";
+    let cursor = 0;
+    let index = 0;
+
+    for (const match of source.matchAll(/"([^"]*)"/g)) {
+      const start = match.index || 0;
+      const quoted = match[1] || "";
+      const before = source.slice(cursor, start);
+
+      if (before) segments.push({ type: "text", value: before });
+      segments.push({ type: "quote", value: quoted, index });
+      template += before + '"{{quote:' + index + '}}"';
+      cursor = start + match[0].length;
+      index += 1;
+    }
+
+    const after = source.slice(cursor);
+    if (after) segments.push({ type: "text", value: after });
+    template += after;
+
+    return { segments, template, quoteCount: index };
+  }
+
+  function applyQuoteTemplate(template, values) {
+    let result = template || "";
+    values.forEach((value, index) => {
+      result = result.replace("{{quote:" + index + "}}", value);
+    });
+
+    return result.trim();
+  }
+
+  function renderDraftQuotedText(analysis) {
+    const source = analysis.currentStatus || analysis.whatChanged || analysis.originalNote || "";
+    const quoted = quotedTextParts(source);
+    if (!quoted.quoteCount) return "";
+
+    const labels = ["Person", "Company", "Role", "Detail"];
+    const body = quoted.segments.map((segment) => {
+      if (segment.type === "text") return `<span>${escapeText(segment.value)}</span>`;
+
+      const label = labels[segment.index] || `Detail ${segment.index + 1}`;
+      return `
+        <label class="inline-flex items-center gap-1 border border-cyan-300/20 bg-cyan-300/5 px-2 py-1">
+          <span class="text-[10px] uppercase tracking-[0.12em] text-cyan-300/70">${escapeText(label)}</span>
+          <input data-draft-quote-index="${segment.index}" value="${escapeText(segment.value)}" class="w-40 min-w-0 bg-transparent text-sm font-medium text-white outline-none focus:text-cyan-100" />
+        </label>
+      `;
+    }).join("");
+
+    return `
+      <div class="mt-5 border border-cyan-300/15 bg-black/20 p-3" data-draft-quoted-status data-draft-status-template="${escapeText(quoted.template)}">
+        <p class="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-cyan-300">Quick edit quoted text</p>
+        <div class="flex flex-wrap items-center gap-1.5 text-sm leading-9 text-slate-400">${body}</div>
+      </div>
+    `;
+  }
+
   function showError(message) {
     const error = document.querySelector("[data-pursuit-error]");
     if (!error) return;
@@ -72,6 +143,8 @@
           <button type="button" data-pursuit-ignore class="border border-white/10 px-4 py-2 text-sm text-slate-500 hover:border-white/25 hover:text-white">Ignore</button>
         </div>
 
+        ${renderDraftQuotedText(analysis)}
+
         <div class="mt-5 grid gap-4 md:grid-cols-2">
           <label class="block"><span class="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">First name</span><input data-draft="person.firstName" value="${escapeText(analysis.person?.firstName)}" class="mt-2 w-full border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/60" /></label>
           <label class="block"><span class="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">Last name</span><input data-draft="person.lastName" value="${escapeText(analysis.person?.lastName)}" class="mt-2 w-full border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/60" /></label>
@@ -104,6 +177,25 @@
       if (path === "nextAction") state.draft.nextAction = value;
       if (path === "suggestedMessage") state.draft.suggestedMessage = value;
     });
+
+    if (!state.draft) return;
+
+    const quotedStatus = document.querySelector("[data-draft-quoted-status]");
+    const quotedValues = Array.from(document.querySelectorAll("[data-draft-quote-index]"))
+      .sort((left, right) => Number(left.getAttribute("data-draft-quote-index")) - Number(right.getAttribute("data-draft-quote-index")))
+      .map((field) => field.value?.trim() || "");
+
+    if (quotedStatus && quotedValues.length) {
+      const quotedName = splitFullName(quotedValues[0]);
+      const status = applyQuoteTemplate(quotedStatus.getAttribute("data-draft-status-template") || "", quotedValues);
+
+      state.draft.currentStatus = status;
+      state.draft.whatChanged = status;
+      state.draft.person.firstName = quotedName.firstName || state.draft.person.firstName;
+      state.draft.person.lastName = quotedName.lastName || state.draft.person.lastName;
+      state.draft.business.name = quotedValues[1] || state.draft.business.name;
+      state.draft.person.role = quotedValues[2] || state.draft.person.role;
+    }
   }
 
   async function review() {
@@ -172,6 +264,25 @@
     return field?.value?.trim() || "";
   }
 
+  function quotedEntryValues(card) {
+    return Array.from(card.querySelectorAll("[data-entry-quote-index]"))
+      .sort((left, right) => Number(left.getAttribute("data-entry-quote-index")) - Number(right.getAttribute("data-entry-quote-index")))
+      .map((field) => field.value?.trim() || "");
+  }
+
+  function statusFromQuotedValues(card, quotedValues) {
+    const quotedStatus = card.querySelector("[data-quoted-status]");
+    if (!quotedStatus || !quotedValues.length) return "";
+
+    let template = quotedStatus.getAttribute("data-status-template") || "";
+    quotedValues.forEach((value, index) => {
+      template = template.replace("{{quote:" + index + "}}", value);
+    });
+
+    return template.trim();
+  }
+
+
   async function saveEntry(button) {
     const card = button.closest("[data-entry-card]");
     if (!card) return;
@@ -187,6 +298,8 @@
 
     try {
       const stage = entryValue(card, "stage");
+      const quotedValues = quotedEntryValues(card);
+      const quotedName = splitFullName(quotedValues[0]);
       const response = await fetch("/api/pursuits/" + pursuitId, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -194,17 +307,17 @@
           direction: action === "save" ? undefined : action,
           currentStage: stage || card.getAttribute("data-current-stage"),
           person: {
-            firstName: entryValue(card, "firstName"),
-            lastName: entryValue(card, "lastName"),
-            role: entryValue(card, "role"),
+            firstName: quotedName.firstName || entryValue(card, "firstName"),
+            lastName: quotedName.lastName || entryValue(card, "lastName"),
+            role: quotedValues[2] || entryValue(card, "role"),
             email: entryValue(card, "email"),
           },
           business: {
-            name: entryValue(card, "businessName"),
+            name: quotedValues[1] || entryValue(card, "businessName"),
           },
           stage,
           storeLabAngle: entryValue(card, "storeLabAngle"),
-          currentStatus: entryValue(card, "currentStatus"),
+          currentStatus: statusFromQuotedValues(card, quotedValues) || entryValue(card, "currentStatus"),
           nextAction: entryValue(card, "nextAction"),
           note: action === "save" ? "Edited pursuit details." : action === "park" ? "Skipped for now." : "Marked " + action + ".",
         }),
@@ -255,6 +368,9 @@
     }
   });
 })();
+
+
+
 
 
 

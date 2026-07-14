@@ -7,8 +7,13 @@ type Props = {
   loading: boolean;
 };
 
+type Segment =
+  | { type: "text"; value: string }
+  | { type: "quote"; value: string; index: number; label: string };
+
 const todayStages = new Set(["Found", "Message Drafted", "Connected", "Demo Accepted", "Email Captured", "Email Sent", "Demo Booked"]);
 const waitingStages = new Set(["Connection Sent", "Follow-up Sent", "Demo Proposed", "Email / Time Requested", "Calendar Sent"]);
+const quoteLabels = ["Person", "Company", "Role", "Detail"];
 
 function personName(pursuit: PursuitListItem) {
   return `${pursuit.person.firstName} ${pursuit.person.lastName}`.trim();
@@ -21,6 +26,45 @@ function formatDate(value?: string | null) {
     day: "numeric",
     month: "short",
   }).format(new Date(value));
+}
+
+function splitQuotedText(value: string) {
+  const segments: Segment[] = [];
+  const matches = value.matchAll(/"([^"]*)"/g);
+  let cursor = 0;
+  let quoteIndex = 0;
+
+  for (const match of matches) {
+    const start = match.index ?? 0;
+    const fullMatch = match[0];
+    const quotedValue = match[1] ?? "";
+
+    if (start > cursor) {
+      segments.push({ type: "text", value: value.slice(cursor, start) });
+    }
+
+    segments.push({
+      type: "quote",
+      value: quotedValue,
+      index: quoteIndex,
+      label: quoteLabels[quoteIndex] ?? `Detail ${quoteIndex + 1}`,
+    });
+
+    cursor = start + fullMatch.length;
+    quoteIndex += 1;
+  }
+
+  if (cursor < value.length) {
+    segments.push({ type: "text", value: value.slice(cursor) });
+  }
+
+  return segments;
+}
+
+function quoteTemplate(value: string) {
+  let index = 0;
+
+  return value.replace(/"([^"]*)"/g, () => `"{{quote:${index++}}}"`);
 }
 
 function EntryField({ label, name, value, multiline = false }: { label: string; name: string; value: string; multiline?: boolean }) {
@@ -45,8 +89,40 @@ function EntryField({ label, name, value, multiline = false }: { label: string; 
   );
 }
 
+function QuotedStatusEditor({ status }: { status: string }) {
+  const segments = splitQuotedText(status);
+  const quoteCount = segments.filter((segment) => segment.type === "quote").length;
+
+  if (!quoteCount) return null;
+
+  return (
+    <div className="sm:col-span-2 border border-cyan-300/15 bg-black/20 p-3" data-quoted-status data-status-template={quoteTemplate(status)}>
+      <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.14em] text-cyan-300">Quick edit quoted text</p>
+      <div className="flex flex-wrap items-center gap-1.5 text-sm leading-9 text-slate-400">
+        {segments.map((segment, segmentIndex) => {
+          if (segment.type === "text") {
+            return <span key={`${segment.value}-${segmentIndex}`}>{segment.value}</span>;
+          }
+
+          return (
+            <label key={`quote-${segment.index}`} className="inline-flex items-center gap-1 rounded-none border border-cyan-300/20 bg-cyan-300/5 px-2 py-1">
+              <span className="text-[10px] uppercase tracking-[0.12em] text-cyan-300/70">{segment.label}</span>
+              <input
+                data-entry-quote-index={segment.index}
+                defaultValue={segment.value}
+                className="w-40 min-w-0 bg-transparent text-sm font-medium text-white outline-none focus:text-cyan-100"
+              />
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function PursuitRow({ pursuit }: { pursuit: PursuitListItem }) {
   const latest = pursuit.interactions[0];
+  const status = pursuit.currentStatus ?? latest?.summary ?? "";
 
   return (
     <details data-entry-card data-pursuit-id={pursuit.id} data-current-stage={pursuit.stage} className="border-b border-white/10 py-3 last:border-b-0">
@@ -76,6 +152,7 @@ function PursuitRow({ pursuit }: { pursuit: PursuitListItem }) {
 
       <div className="mt-3 border border-cyan-300/15 bg-cyan-300/[0.03] p-3">
         <div className="grid gap-3 sm:grid-cols-2">
+          <QuotedStatusEditor status={status} />
           <EntryField label="First" name="firstName" value={pursuit.person.firstName} />
           <EntryField label="Last" name="lastName" value={pursuit.person.lastName} />
           <EntryField label="Role" name="role" value={pursuit.person.role ?? ""} />
@@ -97,7 +174,7 @@ function PursuitRow({ pursuit }: { pursuit: PursuitListItem }) {
             <EntryField label="Angle" name="storeLabAngle" value={pursuit.storeLabAngle ?? ""} />
           </div>
           <div className="sm:col-span-2">
-            <EntryField label="Status" name="currentStatus" value={pursuit.currentStatus ?? latest?.summary ?? ""} multiline />
+            <EntryField label="Status" name="currentStatus" value={status} multiline />
           </div>
           <div className="sm:col-span-2">
             <EntryField label="Next action" name="nextAction" value={pursuit.nextAction ?? ""} multiline />
@@ -140,7 +217,8 @@ function PursuitSection({ title, empty, pursuits }: { title: string; empty: stri
 export default function PursuitLists({ pursuits, loading }: Props) {
   const today = pursuits.filter((pursuit) => todayStages.has(pursuit.stage)).slice(0, 4);
   const waiting = pursuits.filter((pursuit) => waitingStages.has(pursuit.stage)).slice(0, 4);
-  const recent = pursuits.slice(0, 5);
+  const activeIds = new Set([...today, ...waiting].map((pursuit) => pursuit.id));
+  const recent = pursuits.filter((pursuit) => !activeIds.has(pursuit.id)).slice(0, 5);
 
   if (loading) {
     return (
@@ -158,5 +236,4 @@ export default function PursuitLists({ pursuits, loading }: Props) {
     </div>
   );
 }
-
 
