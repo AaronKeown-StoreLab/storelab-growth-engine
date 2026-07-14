@@ -8,6 +8,7 @@ import AddBusinessPanel from "./AddBusinessPanel";
 import BusinessCard from "./BusinessCard";
 import BusinessWorkspace from "./BusinessWorkspace";
 import DailyAssistantPanel from "./DailyAssistantPanel";
+import LinkedInPursuitPanel from "./LinkedInPursuitPanel";
 import { useOneThing } from "../../hooks/useOneThing";
 import { Business } from "../types/business";
 
@@ -132,6 +133,8 @@ export default function TodayBrief() {
 
       <div className="grid min-h-0 flex-1 gap-8 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="no-scrollbar min-h-0 space-y-5 overflow-y-auto pr-2">
+          <LinkedInPursuitPanel onSaved={refreshBusinesses} />
+
           <DailyAssistantPanel
             businesses={businesses}
             onOpenBusiness={(business) => {
@@ -203,4 +206,5 @@ export default function TodayBrief() {
     </section>
   );
 }
+
 

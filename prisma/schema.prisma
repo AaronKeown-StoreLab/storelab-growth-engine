@@ -26,6 +26,7 @@ model Business {
   inboxItems    InboxItem[]
   notebookEntries NotebookEntry[]
   interactions    ContactInteraction[]
+  pursuits        Pursuit[]
 }
 
 model Person {
@@ -44,6 +45,7 @@ model Person {
   evidence    Evidence[]
   timeline    TimelineEvent[]
   interactions ContactInteraction[]
+  pursuits     Pursuit[]
 }
 
 model Employment {
@@ -142,10 +144,46 @@ model ContactInteraction {
   businessId    String
   business      Business @relation(fields: [businessId], references: [id])
 
+  pursuitId     String?
+  pursuit       Pursuit? @relation(fields: [pursuitId], references: [id])
+
   type          String
+  channel       String   @default("LinkedIn")
   summary       String
+  messageText   String?
+  aiNotes       String?
 
   occurredAt    DateTime @default(now())
 
   createdAt     DateTime @default(now())
+}
+
+model Pursuit {
+  id                String   @id @default(cuid())
+
+  personId          String
+  person            Person   @relation(fields: [personId], references: [id])
+
+  businessId        String
+  business          Business @relation(fields: [businessId], references: [id])
+
+  stage             String   @default("Found")
+  priority          String   @default("Medium")
+  source            String   @default("LinkedIn")
+  whyRelevant       String?
+  storeLabAngle     String?
+  currentStatus     String?
+  nextAction        String?
+  nextActionDueAt   DateTime?
+  teaserVideoSent   Boolean  @default(false)
+  lastInteractionAt DateTime?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  interactions      ContactInteraction[]
+
+  @@index([businessId])
+  @@index([personId])
+  @@index([stage])
 }
