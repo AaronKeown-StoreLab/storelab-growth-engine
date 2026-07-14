@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   if (window.__storelabPursuitRuntime) return;
   window.__storelabPursuitRuntime = true;
 
@@ -160,6 +160,64 @@
     }
   }
 
+  function entryError(card, message) {
+    const error = card.querySelector("[data-entry-error]");
+    if (!error) return;
+    error.textContent = message || "";
+    error.classList.toggle("hidden", !message);
+  }
+
+  function entryValue(card, name) {
+    const field = card.querySelector("[data-entry-field=\"" + name + "\"]");
+    return field?.value?.trim() || "";
+  }
+
+  async function saveEntry(button) {
+    const card = button.closest("[data-entry-card]");
+    if (!card) return;
+
+    const pursuitId = card.getAttribute("data-pursuit-id");
+    const action = button.getAttribute("data-entry-action");
+    if (!pursuitId || !action) return;
+
+    entryError(card, "");
+    const previousText = button.textContent;
+    button.disabled = true;
+    button.textContent = "Saving...";
+
+    try {
+      const stage = entryValue(card, "stage");
+      const response = await fetch("/api/pursuits/" + pursuitId, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          direction: action === "save" ? undefined : action,
+          currentStage: stage || card.getAttribute("data-current-stage"),
+          person: {
+            firstName: entryValue(card, "firstName"),
+            lastName: entryValue(card, "lastName"),
+            role: entryValue(card, "role"),
+            email: entryValue(card, "email"),
+          },
+          business: {
+            name: entryValue(card, "businessName"),
+          },
+          stage,
+          storeLabAngle: entryValue(card, "storeLabAngle"),
+          currentStatus: entryValue(card, "currentStatus"),
+          nextAction: entryValue(card, "nextAction"),
+          note: action === "save" ? "Edited pursuit details." : action === "park" ? "Skipped for now." : "Marked " + action + ".",
+        }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || "Could not update this entry.");
+      window.location.reload();
+    } catch (error) {
+      entryError(card, error instanceof Error ? error.message : "Could not update this entry.");
+      button.disabled = false;
+      button.textContent = previousText;
+    }
+  }
   document.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
@@ -187,8 +245,17 @@
     if (target.closest("[data-pursuit-save]")) {
       event.preventDefault();
       save();
+      return;
+    }
+
+    const entryAction = target.closest("[data-entry-action]");
+    if (entryAction) {
+      event.preventDefault();
+      saveEntry(entryAction);
     }
   });
 })();
+
+
 
 

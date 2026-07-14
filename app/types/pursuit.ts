@@ -71,6 +71,7 @@ export type PursuitListItem = {
     lastName: string;
     linkedinUrl?: string | null;
     email?: string | null;
+    role?: string | null;
   };
   business: {
     id: string;
