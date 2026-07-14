@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   if (window.__storelabPursuitRuntime) return;
   window.__storelabPursuitRuntime = true;
 
@@ -11,7 +11,11 @@
     "Follow-up Sent",
     "Replied",
     "Demo Proposed",
+    "Demo Accepted",
     "Email / Time Requested",
+    "Email Captured",
+    "Email Sent",
+    "Calendar Sent",
     "Demo Booked",
     "Gone Quiet",
     "Parked",
@@ -186,3 +190,5 @@
     }
   });
 })();
+
+

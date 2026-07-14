@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useMemo, useState } from "react";
 import { PursuitCaptureAnalysis, PursuitListItem } from "../../types/pursuit";
@@ -32,7 +32,7 @@ export default function PursuitHome({ initialPursuits }: { initialPursuits: Purs
       const data = (await response.json()) as PursuitListItem[];
       setPursuits(data);
     } catch {
-      setNotice("I could not load the pursuit memory. Try refreshing once.");
+      setNotice("I could not load pursuit memory. Refresh once.");
     } finally {
       setLoading(false);
     }
@@ -53,12 +53,12 @@ export default function PursuitHome({ initialPursuits }: { initialPursuits: Purs
     }
 
     await loadPursuits();
-    setNotice("Saved to pursuit memory.");
+    setNotice("Saved.");
   }
 
   const stats = useMemo(() => {
-    const needsActionStages = new Set(["Found", "Connected", "Replied", "Demo Proposed"]);
-    const waitingStages = new Set(["Connection Sent", "Follow-up Sent", "Email / Time Requested"]);
+    const needsActionStages = new Set(["Found", "Message Drafted", "Connected", "Demo Accepted", "Email Captured", "Email Sent", "Demo Booked"]);
+    const waitingStages = new Set(["Connection Sent", "Follow-up Sent", "Demo Proposed", "Email / Time Requested", "Calendar Sent"]);
 
     return {
       needsAction: pursuits.filter((pursuit) => needsActionStages.has(pursuit.stage)).length,
@@ -70,38 +70,37 @@ export default function PursuitHome({ initialPursuits }: { initialPursuits: Purs
   const orderedPursuits = useMemo(() => [...pursuits].sort(sortByAttention), [pursuits]);
 
   return (
-    <section className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl flex-col gap-6">
-      <header className="flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="mb-3 text-xs font-medium uppercase tracking-[0.22em] text-cyan-300/80">
-            StoreLab OS
-          </p>
-          <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-white sm:text-5xl">
-            LinkedIn pursuit memory
-          </h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-slate-400">
-            Tell StoreLab what happened. It remembers the person, the company, the stage, and what you should do next.
-          </p>
-        </div>
+    <section className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-3">
+      <header className="border-b border-white/10 pb-3">
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-cyan-300/80">
+              StoreLab OS
+            </p>
+            <h1 className="truncate text-2xl font-semibold tracking-tight text-white">
+              LinkedIn sidecar
+            </h1>
+          </div>
 
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="border border-white/10 bg-white/[0.03] px-4 py-3">
-            <div className="text-2xl font-semibold">{stats.needsAction}</div>
-            <div className="mt-1 text-xs text-slate-500">Today</div>
-          </div>
-          <div className="border border-white/10 bg-white/[0.03] px-4 py-3">
-            <div className="text-2xl font-semibold">{stats.waiting}</div>
-            <div className="mt-1 text-xs text-slate-500">Waiting</div>
-          </div>
-          <div className="border border-white/10 bg-white/[0.03] px-4 py-3">
-            <div className="text-2xl font-semibold">{stats.recent}</div>
-            <div className="mt-1 text-xs text-slate-500">Saved</div>
+          <div className="grid shrink-0 grid-cols-3 overflow-hidden border border-white/10 bg-white/[0.03] text-center">
+            <div className="min-w-14 px-2 py-2">
+              <div className="text-lg font-semibold">{stats.needsAction}</div>
+              <div className="text-[10px] text-slate-500">Today</div>
+            </div>
+            <div className="min-w-14 border-x border-white/10 px-2 py-2">
+              <div className="text-lg font-semibold">{stats.waiting}</div>
+              <div className="text-[10px] text-slate-500">Wait</div>
+            </div>
+            <div className="min-w-14 px-2 py-2">
+              <div className="text-lg font-semibold">{stats.recent}</div>
+              <div className="text-[10px] text-slate-500">Saved</div>
+            </div>
           </div>
         </div>
       </header>
 
       {notice && (
-        <div className="border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 text-sm text-cyan-100">
+        <div className="border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-sm text-cyan-100">
           {notice}
         </div>
       )}

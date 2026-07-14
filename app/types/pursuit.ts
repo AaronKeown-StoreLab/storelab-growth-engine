@@ -1,12 +1,15 @@
-export const pursuitStages = [
+﻿export const pursuitStages = [
   "Found",
   "Message Drafted",
   "Connection Sent",
   "Connected",
   "Follow-up Sent",
-  "Replied",
   "Demo Proposed",
+  "Demo Accepted",
   "Email / Time Requested",
+  "Email Captured",
+  "Email Sent",
+  "Calendar Sent",
   "Demo Booked",
   "Gone Quiet",
   "Parked",

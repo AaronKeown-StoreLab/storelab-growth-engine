@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useState } from "react";
 import { pursuitStages, PursuitCaptureAnalysis } from "../../types/pursuit";
@@ -9,10 +9,43 @@ type Props = {
   onSaved: (analysis: PursuitCaptureAnalysis) => Promise<void>;
 };
 
-const examples = [
-  "Sent Chris Allan at Lion AU a connection request mentioning our Lion NZ history.",
-  "Rebecca from Mondelez accepted my connection. Need a warm follow-up with teaser video.",
-  "Demo booked with Rebecca next Wednesday.",
+const quickCaptures = [
+  {
+    label: "Found",
+    note: 'Found "Joe Blogs" from "7Eleven Australia" with role "Marketing Mgr". Message needed.',
+  },
+  {
+    label: "Request sent",
+    note: 'Connection request sent to "Joe Blogs" with message: ',
+  },
+  {
+    label: "Connected",
+    note: 'Connection accepted with "Joe Blogs".',
+  },
+  {
+    label: "Demo proposed",
+    note: 'Follow up message back to "Joe Blogs" with demo proposed sent.',
+  },
+  {
+    label: "Demo accepted",
+    note: 'Demo accepted by "Joe Blogs". Message needed to confirm email address and advise we will lock in time and date via email.',
+  },
+  {
+    label: "Email received",
+    note: '"Joe Blogs" replied on LinkedIn with their email address: ',
+  },
+  {
+    label: "Email sent",
+    note: 'Email sent to "Joe Blogs" to confirm day and time for either Teams or onsite Pymble.',
+  },
+  {
+    label: "Calendar sent",
+    note: 'Calendar booking for Teams sent to "Joe Blogs".',
+  },
+  {
+    label: "Booked",
+    note: 'Calendar booking accepted by "Joe Blogs" and demo is locked in.',
+  },
 ];
 
 export default function PursuitCapture({ onPreview, onSaved }: Props) {
@@ -72,49 +105,51 @@ export default function PursuitCapture({ onPreview, onSaved }: Props) {
   }
 
   return (
-    <section className="border border-cyan-300/20 bg-[#071014] p-4 shadow-2xl shadow-black/20 sm:p-6">
+    <section className="border border-cyan-300/20 bg-[#071014] p-3 shadow-xl shadow-black/20 sm:p-4">
       <form onSubmit={analyse}>
         <label htmlFor="linkedin-note" className="text-sm font-medium text-white">
-          What happened on LinkedIn?
+          Quick capture
         </label>
         <textarea
           id="linkedin-note"
           data-pursuit-note
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          rows={5}
-          placeholder="Example: Rebecca from Mondelez accepted my connection. Need a warm follow-up with teaser video."
-          className="mt-3 w-full resize-none border border-white/10 bg-black/20 p-4 text-base leading-7 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60"
+          rows={3}
+          placeholder='Example: Found "Joe Blogs" from "7Eleven Australia" with role "Marketing Mgr". Message needed.'
+          className="mt-2 w-full resize-none border border-white/10 bg-black/20 p-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60"
         />
 
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-3 flex flex-col gap-3">
           <div className="flex flex-wrap gap-2">
-            {examples.map((example) => (
+            {quickCaptures.map((capture) => (
               <button
-                key={example}
+                key={capture.label}
                 type="button"
-                data-pursuit-example={example}
-                onClick={() => setNote(example)}
-                className="border border-white/10 px-3 py-2 text-xs text-slate-400 transition hover:border-white/25 hover:text-white"
+                data-pursuit-example={capture.note}
+                onClick={() => setNote(capture.note)}
+                className="border border-white/10 px-2.5 py-1.5 text-[11px] font-medium text-slate-300 transition hover:border-cyan-300/50 hover:text-cyan-100"
               >
-                Use example
+                {capture.label}
               </button>
             ))}
           </div>
 
-          <button
-            type="button"
-            data-pursuit-review
-            onClick={() => void analyse()}
-            disabled={status !== "idle"}
-            className="border border-cyan-300 bg-cyan-300 px-5 py-3 text-sm font-semibold text-black transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {status === "thinking" ? "Reading..." : "Review"}
-          </button>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              data-pursuit-review
+              onClick={() => void analyse()}
+              disabled={status !== "idle"}
+              className="border border-cyan-300 bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {status === "thinking" ? "Reading..." : "Review"}
+            </button>
+          </div>
         </div>
       </form>
 
-      <div data-pursuit-error className="mt-4 hidden border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100" />
+      <div data-pursuit-error className="mt-3 hidden border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100" />
       <div data-pursuit-preview />
 
       {error && (
@@ -136,3 +171,4 @@ export default function PursuitCapture({ onPreview, onSaved }: Props) {
     </section>
   );
 }
+

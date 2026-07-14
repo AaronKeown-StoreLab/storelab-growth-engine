@@ -7,9 +7,12 @@ const stages: PursuitStage[] = [
   "Connection Sent",
   "Connected",
   "Follow-up Sent",
-  "Replied",
   "Demo Proposed",
+  "Demo Accepted",
   "Email / Time Requested",
+  "Email Captured",
+  "Email Sent",
+  "Calendar Sent",
   "Demo Booked",
   "Gone Quiet",
   "Parked",
@@ -32,12 +35,37 @@ type Context = {
   }[];
 };
 
+type ExtractedProfile = {
+  personName: string;
+  businessName: string;
+  role?: string;
+  location?: string;
+};
+
+const countryWords = [
+  "Australia",
+  "Malaysia",
+  "New Zealand",
+  "United Kingdom",
+  "Singapore",
+  "Indonesia",
+  "Thailand",
+  "Vietnam",
+  "Philippines",
+  "United States",
+  "Canada",
+];
+
 function cleanJsonResult(result: string) {
   return result.replace(/```json/g, "").replace(/```/g, "").trim();
 }
 
 function cleanText(value?: string | null) {
   return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function normaliseName(value: string) {
+  return cleanText(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function splitName(value: string) {
@@ -63,14 +91,17 @@ function inferStage(note: string): PursuitStage {
   if (/not relevant|no longer relevant|bad fit/.test(lower)) return "Not Relevant";
   if (/park|later|not now/.test(lower)) return "Parked";
   if (/gone quiet|no reply|hasn'?t replied|has not replied/.test(lower)) return "Gone Quiet";
-  if (/demo booked|meeting booked|teams booked|call booked/.test(lower)) return "Demo Booked";
-  if (/email|availability|available|time.*day|day.*time/.test(lower)) return "Email / Time Requested";
-  if (/demo proposed|suggested.*demo|proposed.*demo|open to seeing|quick demo|teams demo/.test(lower)) return "Demo Proposed";
-  if (/replied|responded|asked for|positive|interested/.test(lower)) return "Replied";
-  if (/follow.?up sent|sent .*follow/.test(lower)) return "Follow-up Sent";
-  if (/accepted|already connected|\b1st\b/.test(lower)) return "Connected";
-  if (/sent .*connection|connection request sent|sent .*request/.test(lower)) return "Connection Sent";
-  if (/draft|prepared/.test(lower)) return "Message Drafted";
+  if (/calendar booking accepted|calendar accepted|demo is locked|demo locked|meeting booked|demo booked|teams booked|onsite booked|call booked/.test(lower)) return "Demo Booked";
+  if (/calendar booking .*sent|calendar invite .*sent|invite sent|sent .*calendar/.test(lower)) return "Calendar Sent";
+  if (/email sent|sent .*email|emailed .*confirm|email .*confirm day|email .*confirm time/.test(lower)) return "Email Sent";
+  if (/confirm email|ask.*email|asked.*email|message needed.*email|email.*availability|availability|available|time.*day|day.*time/.test(lower)) return "Email / Time Requested";
+  if (extractEmail(note) || /replies?.*email|replied.*email|shared.*email|sent.*email address/.test(lower)) return "Email Captured";
+  if (/demo accepted|accepted.*demo|keen.*demo|happy.*demo|open to.*demo/.test(lower)) return "Demo Accepted";
+  if (/demo proposed|suggested.*demo|proposed.*demo|open to seeing|quick demo|teams demo|demo proposed sent/.test(lower)) return "Demo Proposed";
+  if (/follow.?up sent|sent .*follow|follow up message|follow-up message/.test(lower)) return "Follow-up Sent";
+  if (/accepted|already connected|connection accepted|\b1st\b/.test(lower)) return "Connected";
+  if (/sent .*connection|connection request sent|request sent|sent .*request/.test(lower)) return "Connection Sent";
+  if (/draft|prepared|message needed|needs? message/.test(lower)) return "Message Drafted";
 
   return "Found";
 }
@@ -81,13 +112,16 @@ function touchpointTypeForStage(stage: PursuitStage) {
 
 function nextActionForStage(stage: PursuitStage, teaserVideoSent: boolean) {
   if (stage === "Found") return "Draft a short, personal connection request.";
-  if (stage === "Message Drafted") return "Send the LinkedIn connection request.";
+  if (stage === "Message Drafted") return "Review the suggested connection message, then send the LinkedIn request.";
   if (stage === "Connection Sent") return "Wait for the connection to be accepted.";
-  if (stage === "Connected") return teaserVideoSent ? "Send a warm follow-up referencing the teaser video." : "Send a warm follow-up and consider a teaser video.";
+  if (stage === "Connected") return teaserVideoSent ? "Send a warm follow-up referencing the teaser video." : "Send a warm follow-up and propose a quick StoreLab demo.";
   if (stage === "Follow-up Sent") return "Wait for a reply, then follow up lightly if they go quiet.";
-  if (stage === "Replied") return "Reply naturally and ask for email or availability if the timing feels right.";
-  if (stage === "Demo Proposed") return "Ask for email, availability, and who should join a Teams demo.";
-  if (stage === "Email / Time Requested") return "Wait for availability and be ready to book the Teams demo.";
+  if (stage === "Demo Proposed") return "Wait for them to accept the demo idea.";
+  if (stage === "Demo Accepted") return "Ask for their email address and say you will lock in time by email.";
+  if (stage === "Email / Time Requested") return "Wait for their email address or availability.";
+  if (stage === "Email Captured") return "Send an email to confirm day, time, and Teams or onsite Pymble.";
+  if (stage === "Email Sent") return "Send the calendar booking once the time is agreed.";
+  if (stage === "Calendar Sent") return "Wait for the calendar booking to be accepted.";
   if (stage === "Demo Booked") return "Prepare a short demo brief and the best StoreLab angle.";
   if (stage === "Gone Quiet") return "Send one light nudge or park if the timing feels wrong.";
   if (stage === "Parked") return "Leave parked until a better signal appears.";
@@ -96,8 +130,8 @@ function nextActionForStage(stage: PursuitStage, teaserVideoSent: boolean) {
 }
 
 function dueDateForStage(stage: PursuitStage) {
-  if (["Found", "Connected", "Replied", "Demo Proposed"].includes(stage)) return addDays(1);
-  if (["Connection Sent", "Follow-up Sent", "Email / Time Requested"].includes(stage)) return addDays(5);
+  if (["Found", "Message Drafted", "Connected", "Demo Accepted", "Email Captured", "Email Sent"].includes(stage)) return addDays(1);
+  if (["Connection Sent", "Follow-up Sent", "Demo Proposed", "Email / Time Requested", "Calendar Sent"].includes(stage)) return addDays(5);
   if (stage === "Gone Quiet") return addDays(7);
 
   return undefined;
@@ -120,15 +154,23 @@ function suggestedMessageForStage(input: {
   if (input.stage === "Connected") {
     return input.teaserVideoSent
       ? `Thanks for connecting ${name}. I can send a short StoreLab teaser if useful - keen to compare notes when timing suits.`
-      : `Thanks for connecting ${name}. I thought there might be a useful StoreLab conversation for ${input.businessName} when timing suits.`;
+      : `Thanks for connecting ${name}. I thought there might be a useful StoreLab conversation for ${input.businessName} when timing suits. Would you be open to a quick look?`;
   }
 
-  if (input.stage === "Replied") {
-    return `Thanks ${name}. Happy to send a little more context. If useful, what is the best email and who should be included for a quick Teams demo?`;
+  if (input.stage === "Demo Accepted") {
+    return `Great, thanks ${name}. What is the best email for you? I can then lock in a day and time from there.`;
+  }
+
+  if (input.stage === "Email Captured") {
+    return `Thanks ${name}. I will send an email across now so we can lock in the best day and time.`;
   }
 
   if (input.stage === "Demo Proposed" || input.stage === "Email / Time Requested") {
-    return `Would it be easiest to find 20 minutes on Teams? If you send the best email and a couple of times, I can line it up from our side.`;
+    return `Would it be easiest to find 20 minutes on Teams, or would onsite at Pymble be better? If you send the best email and a couple of times, I can line it up from our side.`;
+  }
+
+  if (input.stage === "Calendar Sent") {
+    return `I have sent the calendar invite through now, ${name}. Looking forward to showing you StoreLab.`;
   }
 
   if (input.stage === "Gone Quiet") {
@@ -141,27 +183,6 @@ function suggestedMessageForStage(input: {
 function extractLinkedInUrl(note: string) {
   return note.match(/https?:\/\/[^\s]+linkedin\.com\/[^\s]+/i)?.[0];
 }
-
-type ExtractedProfile = {
-  personName: string;
-  businessName: string;
-  role?: string;
-  location?: string;
-};
-
-const countryWords = [
-  "Australia",
-  "Malaysia",
-  "New Zealand",
-  "United Kingdom",
-  "Singapore",
-  "Indonesia",
-  "Thailand",
-  "Vietnam",
-  "Philippines",
-  "United States",
-  "Canada",
-];
 
 function cleanBusinessName(value: string) {
   return cleanText(value)
@@ -221,7 +242,7 @@ function linkedinLines(note: string) {
 }
 
 function parseRoleBusinessLocation(value: string) {
-  const headline = cleanText(value).replace(/\s+·\s+.*$/, "");
+  const headline = cleanText(value).replace(/\s+\u00B7\s+.*$/, "");
   const atMatch = headline.match(/^(.{2,90}?)\s+at\s+(.{2,90}?)(?:\s+(Greater [A-Z][A-Za-z ,]+|[A-Z][A-Za-z]+,\s*[A-Z][A-Za-z ,]+|Malaysia|Australia|Singapore|New Zealand|United Kingdom))?$/i);
 
   if (atMatch) {
@@ -286,6 +307,30 @@ function extractFromLinkedInLines(note: string): ExtractedProfile | undefined {
   return undefined;
 }
 
+function extractQuotedProfile(note: string, context: Context): ExtractedProfile | undefined {
+  const quoted = [...note.matchAll(/"([^"\r\n]+)"/g)].map((match) => cleanText(match[1]));
+  const personName = quoted.find((value) => looksLikeNameLine(value)) ?? "";
+  const businessMatch = note.match(/(?:from|at|with company)\s+"([^"]+)"/i);
+  const roleMatch = note.match(/(?:role|title)\s+"([^"]+)"/i);
+  const businessName = cleanText(businessMatch?.[1]);
+
+  if (!personName && !businessName) return undefined;
+
+  const existing = context.pursuits.find((pursuit) =>
+    personName && normaliseName(pursuit.personName) === normaliseName(personName)
+  );
+
+  return {
+    personName: personName || existing?.personName || "",
+    businessName: cleanBusinessName(businessName || existing?.businessName || "Unknown company"),
+    role: cleanText(roleMatch?.[1]) || undefined,
+  };
+}
+
+function extractEmail(note: string) {
+  return note.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
+}
+
 function extractPersonAndBusiness(note: string, context: Context): ExtractedProfile {
   const namePattern = "([A-Z][A-Za-z'-]+(?:\\s+[A-Z][A-Za-z'-]+){1,3})";
   const businessPattern = "([A-Za-z0-9][A-Za-z0-9&.' -]{1,90}?)(?=\\s+(?:a\\s+)?(?:linkedin|connection request|request|message|follow-?up)\\b|\\s+(?:after|because|mention(?:ing|ed)?|about|who|that|where|worth|already)\\b|\\s+-\\s+|[.!,]|$)";
@@ -300,11 +345,13 @@ function extractPersonAndBusiness(note: string, context: Context): ExtractedProf
     };
   }
 
-  const linkedinProfile = extractFromLinkedInLines(note);
+  const quotedProfile = extractQuotedProfile(note, context);
+  if (quotedProfile) return quotedProfile;
 
+  const linkedinProfile = extractFromLinkedInLines(note);
   if (linkedinProfile) return linkedinProfile;
 
-  const actionPrefix = "(?:found|sent|asked|messaged|connected with|demo booked with|followed up with|replied to)";
+  const actionPrefix = "(?:found|sent|asked|messaged|connected with|connection accepted with|demo accepted by|demo booked with|followed up with|replied to|email sent to|calendar booking sent to)";
   const directMatch = note.match(new RegExp(`^\\s*${actionPrefix}?\\s*${namePattern}\\s+(?:at|from|with)\\s+${businessPattern}`, "i"));
   const acceptedMatch = note.match(/([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,3})\s+from\s+([A-Z][A-Za-z0-9&.' -]{1,60})\s+(?:accepted|replied|responded)/);
   const match = directMatch ?? acceptedMatch;
@@ -333,13 +380,15 @@ function extractPersonAndBusiness(note: string, context: Context): ExtractedProf
     businessName: business?.name ?? "Unknown company",
   };
 }
+
 function angleFromNote(note: string) {
   const mentioning = note.match(/mention(?:ing|ed)?\s+(.+?)(?:\.|$)/i)?.[1];
   const because = note.match(/because\s+(.+?)(?:\.|$)/i)?.[1];
   const relevant = note.match(/relevant\s+because\s+(.+?)(?:\.|$)/i)?.[1];
   const storeLab = note.match(/(?:worth reviewing for|useful for|good fit for|StoreLab|demo|retail execution).+?(?:\.|$)/i)?.[0];
+  const email = extractEmail(note);
 
-  return cleanText(mentioning ?? relevant ?? because ?? storeLab ?? "");
+  return cleanText(mentioning ?? relevant ?? because ?? email ?? storeLab ?? "");
 }
 
 export function fallbackPursuitAnalysis(note: string, context: Context): PursuitCaptureAnalysis {
@@ -365,7 +414,7 @@ export function fallbackPursuitAnalysis(note: string, context: Context): Pursuit
       name: businessName,
     },
     stage,
-    priority: ["Replied", "Demo Proposed", "Demo Booked"].includes(stage) ? "High" : "Medium",
+    priority: ["Replied", "Demo Proposed", "Demo Accepted", "Email Captured", "Email Sent", "Calendar Sent", "Demo Booked"].includes(stage) ? "High" : "Medium",
     source: "LinkedIn",
     whatChanged: cleaned,
     whyRelevant: storeLabAngle || undefined,
@@ -374,7 +423,7 @@ export function fallbackPursuitAnalysis(note: string, context: Context): Pursuit
     nextAction,
     nextActionDueAt: dueDateForStage(stage),
     teaserVideoSent,
-    messageText: /sent|asked|messaged/i.test(cleaned) ? cleaned : undefined,
+    messageText: /sent|asked|messaged|emailed/i.test(cleaned) ? cleaned : undefined,
     suggestedMessage: suggestedMessageForStage({
       stage,
       firstName: person.firstName,
@@ -499,16 +548,4 @@ Return ONLY JSON with this shape:
     return fallback;
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
