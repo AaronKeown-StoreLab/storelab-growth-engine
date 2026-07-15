@@ -11,17 +11,16 @@ type CaptureAction = {
   id: string;
   label: string;
   fields: ActionField[];
-  needsMessage?: boolean;
 };
 
 const actions: CaptureAction[] = [
-  { id: "found", label: "Found", fields: ["name", "business", "role", "location"], needsMessage: true },
+  { id: "found", label: "Found", fields: ["name", "business", "role", "location"] },
   { id: "request-sent", label: "Request sent", fields: ["name"] },
-  { id: "connected", label: "Connected", fields: ["name"], needsMessage: true },
-  { id: "demo-proposed", label: "Demo proposed", fields: ["name", "business"], needsMessage: true },
-  { id: "demo-accepted", label: "Demo accepted", fields: ["name"], needsMessage: true },
+  { id: "connected", label: "Connected", fields: ["name"] },
+  { id: "demo-proposed", label: "Demo proposed", fields: ["name", "business"] },
+  { id: "demo-accepted", label: "Demo accepted", fields: ["name"] },
   { id: "email-received", label: "Email received", fields: ["name", "email"] },
-  { id: "email-sent", label: "Email sent", fields: ["name", "demoType"], needsMessage: true },
+  { id: "email-sent", label: "Email sent", fields: ["name", "demoType"] },
   { id: "calendar-sent", label: "Calendar sent", fields: ["name", "demoType"] },
   { id: "booked", label: "Booked", fields: ["name"] },
   { id: "parked", label: "Parked", fields: ["name"] },
@@ -102,7 +101,7 @@ export default function PursuitCapture(props: Props) {
             data-capture-review
             className="border border-cyan-300 bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Review with AI
+            Start pursuit
           </button>
         </div>
       </form>
@@ -112,5 +111,3 @@ export default function PursuitCapture(props: Props) {
     </section>
   );
 }
-
-
