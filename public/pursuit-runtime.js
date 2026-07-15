@@ -286,6 +286,15 @@
     };
   }
 
+  function renderProjectSummary(card) {
+    const context = projectContext(card);
+    const action = actionById(context.actionId);
+    const sentence = card.querySelector("[data-project-sentence]");
+    if (sentence) sentence.textContent = action.sentence(context.fields);
+    const coach = card.querySelector("[data-project-message-coach]");
+    if (coach) renderMessageCarousel(coach, context);
+  }
+
   function renderProjectCard(card) {
     const context = projectContext(card);
     const action = actionById(context.actionId);
@@ -293,10 +302,7 @@
     if (fieldsContainer) {
       fieldsContainer.innerHTML = action.fields.map((field) => fieldHtml(field, context.fields[field], "project")).join("");
     }
-    const sentence = card.querySelector("[data-project-sentence]");
-    if (sentence) sentence.textContent = action.sentence(context.fields);
-    const coach = card.querySelector("[data-project-message-coach]");
-    if (coach) renderMessageCarousel(coach, context);
+    renderProjectSummary(card);
   }
 
   function renderProjects() {
@@ -471,7 +477,10 @@
       captureState.fields[target.getAttribute("data-smart-field")] = target.value;
       captureState.selectedMessage = "";
       captureState.messageIndex = 0;
-      renderCapture();
+      const sentenceTarget = document.querySelector("[data-sentence-preview]");
+      if (sentenceTarget) sentenceTarget.textContent = captureSentence();
+      const coach = document.querySelector("[data-message-coach]");
+      if (coach) renderMessageCarousel(coach, { ...captureState, scope: "capture" });
       return;
     }
 
@@ -488,7 +497,7 @@
       if (card) {
         card.dataset.selectedMessage = "";
         card.dataset.messageIndex = "0";
-        renderProjectCard(card);
+        renderProjectSummary(card);
       }
       return;
     }
@@ -642,6 +651,7 @@
     renderProjects();
   }
 })();
+
 
 
 
