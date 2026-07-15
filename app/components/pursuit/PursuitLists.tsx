@@ -1,19 +1,14 @@
 "use client";
 
-import { pursuitStages, PursuitListItem } from "../../types/pursuit";
+import { PursuitListItem } from "../../types/pursuit";
 
 type Props = {
   pursuits: PursuitListItem[];
   loading: boolean;
 };
 
-type Segment =
-  | { type: "text"; value: string }
-  | { type: "quote"; value: string; index: number; label: string };
-
 const todayStages = new Set(["Found", "Message Drafted", "Connected", "Demo Accepted", "Email Captured", "Email Sent", "Demo Booked"]);
 const waitingStages = new Set(["Connection Sent", "Follow-up Sent", "Demo Proposed", "Email / Time Requested", "Calendar Sent"]);
-const quoteLabels = ["Person", "Company", "Role", "Detail"];
 
 function personName(pursuit: PursuitListItem) {
   return `${pursuit.person.firstName} ${pursuit.person.lastName}`.trim();
@@ -28,98 +23,6 @@ function formatDate(value?: string | null) {
   }).format(new Date(value));
 }
 
-function splitQuotedText(value: string) {
-  const segments: Segment[] = [];
-  const matches = value.matchAll(/"([^"]*)"/g);
-  let cursor = 0;
-  let quoteIndex = 0;
-
-  for (const match of matches) {
-    const start = match.index ?? 0;
-    const fullMatch = match[0];
-    const quotedValue = match[1] ?? "";
-
-    if (start > cursor) {
-      segments.push({ type: "text", value: value.slice(cursor, start) });
-    }
-
-    segments.push({
-      type: "quote",
-      value: quotedValue,
-      index: quoteIndex,
-      label: quoteLabels[quoteIndex] ?? `Detail ${quoteIndex + 1}`,
-    });
-
-    cursor = start + fullMatch.length;
-    quoteIndex += 1;
-  }
-
-  if (cursor < value.length) {
-    segments.push({ type: "text", value: value.slice(cursor) });
-  }
-
-  return segments;
-}
-
-function quoteTemplate(value: string) {
-  let index = 0;
-
-  return value.replace(/"([^"]*)"/g, () => `"{{quote:${index++}}}"`);
-}
-
-function EntryField({ label, name, value, multiline = false }: { label: string; name: string; value: string; multiline?: boolean }) {
-  return (
-    <label className="block">
-      <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">{label}</span>
-      {multiline ? (
-        <textarea
-          data-entry-field={name}
-          defaultValue={value}
-          rows={2}
-          className="mt-1 w-full resize-none border border-white/10 bg-black/20 px-2.5 py-2 text-sm leading-5 text-white outline-none focus:border-cyan-300/60"
-        />
-      ) : (
-        <input
-          data-entry-field={name}
-          defaultValue={value}
-          className="mt-1 w-full border border-white/10 bg-black/20 px-2.5 py-2 text-sm text-white outline-none focus:border-cyan-300/60"
-        />
-      )}
-    </label>
-  );
-}
-
-function QuotedStatusEditor({ status }: { status: string }) {
-  const segments = splitQuotedText(status);
-  const quoteCount = segments.filter((segment) => segment.type === "quote").length;
-
-  if (!quoteCount) return null;
-
-  return (
-    <div className="sm:col-span-2 border border-cyan-300/15 bg-black/20 p-3" data-quoted-status data-status-template={quoteTemplate(status)}>
-      <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.14em] text-cyan-300">Quick edit quoted text</p>
-      <div className="flex flex-wrap items-center gap-1.5 text-sm leading-9 text-slate-400">
-        {segments.map((segment, segmentIndex) => {
-          if (segment.type === "text") {
-            return <span key={`${segment.value}-${segmentIndex}`}>{segment.value}</span>;
-          }
-
-          return (
-            <label key={`quote-${segment.index}`} className="inline-flex items-center gap-1 rounded-none border border-cyan-300/20 bg-cyan-300/5 px-2 py-1">
-              <span className="text-[10px] uppercase tracking-[0.12em] text-cyan-300/70">{segment.label}</span>
-              <input
-                data-entry-quote-index={segment.index}
-                defaultValue={segment.value}
-                className="w-40 min-w-0 bg-transparent text-sm font-medium text-white outline-none focus:text-cyan-100"
-              />
-            </label>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function PursuitRow({ pursuit }: { pursuit: PursuitListItem }) {
   const latest = pursuit.interactions[0];
   const status = pursuit.currentStatus ?? latest?.summary ?? "";
@@ -132,9 +35,10 @@ function PursuitRow({ pursuit }: { pursuit: PursuitListItem }) {
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <h3 className="truncate text-sm font-semibold text-white">{personName(pursuit)}</h3>
               <span className="truncate text-xs text-slate-500">{pursuit.business.name}</span>
+              {pursuit.person.role && <span className="truncate text-xs text-slate-600">{pursuit.person.role}</span>}
             </div>
             <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-400">
-              {pursuit.nextAction || pursuit.currentStatus || latest?.summary || "No next action yet."}
+              {pursuit.nextAction || status || "No next action yet."}
             </p>
             {pursuit.storeLabAngle && (
               <p className="mt-1 line-clamp-1 text-xs leading-5 text-slate-500">
@@ -151,35 +55,25 @@ function PursuitRow({ pursuit }: { pursuit: PursuitListItem }) {
       </summary>
 
       <div className="mt-3 border border-cyan-300/15 bg-cyan-300/[0.03] p-3">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <QuotedStatusEditor status={status} />
-          <EntryField label="First" name="firstName" value={pursuit.person.firstName} />
-          <EntryField label="Last" name="lastName" value={pursuit.person.lastName} />
-          <EntryField label="Role" name="role" value={pursuit.person.role ?? ""} />
-          <EntryField label="Company" name="businessName" value={pursuit.business.name} />
-          <EntryField label="Email" name="email" value={pursuit.person.email ?? ""} />
-          <label className="block">
-            <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">Stage</span>
-            <select
-              data-entry-field="stage"
-              defaultValue={pursuit.stage}
-              className="mt-1 w-full border border-white/10 bg-black px-2.5 py-2 text-sm text-white outline-none focus:border-cyan-300/60"
-            >
-              {pursuitStages.map((stage) => (
-                <option key={stage} value={stage}>{stage}</option>
-              ))}
-            </select>
-          </label>
-          <div className="sm:col-span-2">
-            <EntryField label="Angle" name="storeLabAngle" value={pursuit.storeLabAngle ?? ""} />
-          </div>
-          <div className="sm:col-span-2">
-            <EntryField label="Status" name="currentStatus" value={status} multiline />
-          </div>
-          <div className="sm:col-span-2">
-            <EntryField label="Next action" name="nextAction" value={pursuit.nextAction ?? ""} multiline />
-          </div>
-        </div>
+        <label className="block">
+          <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">Status</span>
+          <textarea
+            data-entry-field="currentStatus"
+            defaultValue={status}
+            rows={2}
+            className="mt-1 w-full resize-none border border-white/10 bg-black/20 px-2.5 py-2 text-sm leading-5 text-white outline-none focus:border-cyan-300/60"
+          />
+        </label>
+
+        <label className="mt-3 block">
+          <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">Next action</span>
+          <textarea
+            data-entry-field="nextAction"
+            defaultValue={pursuit.nextAction ?? ""}
+            rows={2}
+            className="mt-1 w-full resize-none border border-white/10 bg-black/20 px-2.5 py-2 text-sm leading-5 text-white outline-none focus:border-cyan-300/60"
+          />
+        </label>
 
         <div data-entry-error className="mt-3 hidden border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-100" />
 
@@ -236,4 +130,3 @@ export default function PursuitLists({ pursuits, loading }: Props) {
     </div>
   );
 }
-

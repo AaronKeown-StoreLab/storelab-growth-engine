@@ -1,4 +1,4 @@
-﻿import { prisma } from "../lib/prisma";
+import { prisma } from "../lib/prisma";
 import { pursuitStages, PursuitCaptureAnalysis, PursuitListItem, PursuitPriority, PursuitStage } from "../types/pursuit";
 
 const pursuitInclude = {
@@ -422,12 +422,15 @@ export async function updatePursuit(pursuitId: string, input: PursuitUpdateInput
     throw new Error("Could not find that pursuit.");
   }
 
-  const firstName = cleanText(input.person?.firstName) || existing.person.firstName;
-  const lastName = cleanText(input.person?.lastName);
-  const email = cleanText(input.person?.email);
-  const linkedinUrl = cleanText(input.person?.linkedinUrl);
-  const role = cleanText(input.person?.role);
-  const businessName = cleanText(input.business?.name) || existing.business.name;
+  const existingRole = existing.person.employments.find(
+    (employment) => employment.businessId === existing.businessId && employment.isCurrent
+  )?.jobTitle ?? "";
+  const firstName = input.person && "firstName" in input.person ? cleanText(input.person.firstName) || existing.person.firstName : existing.person.firstName;
+  const lastName = input.person && "lastName" in input.person ? cleanText(input.person.lastName) : existing.person.lastName;
+  const email = input.person && "email" in input.person ? cleanText(input.person.email) : existing.person.email ?? "";
+  const linkedinUrl = input.person && "linkedinUrl" in input.person ? cleanText(input.person.linkedinUrl) : existing.person.linkedinUrl ?? "";
+  const role = input.person && "role" in input.person ? cleanText(input.person.role) : existingRole;
+  const businessName = input.business && "name" in input.business ? cleanText(input.business.name) || existing.business.name : existing.business.name;
   const stage = asPursuitStage(input.stage) ?? asStage(existing.stage);
   const now = new Date();
 
@@ -456,24 +459,26 @@ export async function updatePursuit(pursuitId: string, input: PursuitUpdateInput
     (employment) => employment.businessId === business.id && employment.isCurrent
   );
 
-  if (currentEmployment) {
-    await prisma.employment.update({
-      where: {
-        id: currentEmployment.id,
-      },
-      data: {
-        jobTitle: role || null,
-      },
-    });
-  } else if (role) {
-    await prisma.employment.create({
-      data: {
-        personId: existing.personId,
-        businessId: business.id,
-        jobTitle: role,
-        isCurrent: true,
-      },
-    });
+  if (input.person && "role" in input.person) {
+    if (currentEmployment) {
+      await prisma.employment.update({
+        where: {
+          id: currentEmployment.id,
+        },
+        data: {
+          jobTitle: role || null,
+        },
+      });
+    } else if (role) {
+      await prisma.employment.create({
+        data: {
+          personId: existing.personId,
+          businessId: business.id,
+          jobTitle: role,
+          isCurrent: true,
+        },
+      });
+    }
   }
 
   const nextAction = cleanText(input.nextAction) || nextActionForManualStage(stage);
@@ -523,3 +528,4 @@ export async function updatePursuit(pursuitId: string, input: PursuitUpdateInput
 
   return toListItem(saved);
 }
+

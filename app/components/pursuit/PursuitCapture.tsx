@@ -1,174 +1,116 @@
-﻿"use client";
-
-import { FormEvent, useState } from "react";
-import { pursuitStages, PursuitCaptureAnalysis } from "../../types/pursuit";
-import PursuitPreview from "./PursuitPreview";
+"use client";
 
 type Props = {
   onPreview: () => void;
-  onSaved: (analysis: PursuitCaptureAnalysis) => Promise<void>;
+  onSaved: (analysis: never) => Promise<void>;
 };
 
-const quickCaptures = [
-  {
-    label: "Found",
-    note: 'Found "Joe Blogs" from "7Eleven Australia" with role "Marketing Mgr". Message needed.',
-  },
-  {
-    label: "Request sent",
-    note: 'Connection request sent to "Joe Blogs" with message: ',
-  },
-  {
-    label: "Connected",
-    note: 'Connection accepted with "Joe Blogs".',
-  },
-  {
-    label: "Demo proposed",
-    note: 'Follow up message back to "Joe Blogs" with demo proposed sent.',
-  },
-  {
-    label: "Demo accepted",
-    note: 'Demo accepted by "Joe Blogs". Message needed to confirm email address and advise we will lock in time and date via email.',
-  },
-  {
-    label: "Email received",
-    note: '"Joe Blogs" replied on LinkedIn with their email address: ',
-  },
-  {
-    label: "Email sent",
-    note: 'Email sent to "Joe Blogs" to confirm day and time for either Teams or onsite Pymble.',
-  },
-  {
-    label: "Calendar sent",
-    note: 'Calendar booking for Teams sent to "Joe Blogs".',
-  },
-  {
-    label: "Booked",
-    note: 'Calendar booking accepted by "Joe Blogs" and demo is locked in.',
-  },
+type ActionField = "name" | "business" | "role" | "location" | "email" | "demoType";
+
+type CaptureAction = {
+  id: string;
+  label: string;
+  fields: ActionField[];
+  needsMessage?: boolean;
+};
+
+const actions: CaptureAction[] = [
+  { id: "found", label: "Found", fields: ["name", "business", "role", "location"], needsMessage: true },
+  { id: "request-sent", label: "Request sent", fields: ["name"] },
+  { id: "connected", label: "Connected", fields: ["name"], needsMessage: true },
+  { id: "demo-proposed", label: "Demo proposed", fields: ["name", "business"], needsMessage: true },
+  { id: "demo-accepted", label: "Demo accepted", fields: ["name"], needsMessage: true },
+  { id: "email-received", label: "Email received", fields: ["name", "email"] },
+  { id: "email-sent", label: "Email sent", fields: ["name", "demoType"], needsMessage: true },
+  { id: "calendar-sent", label: "Calendar sent", fields: ["name", "demoType"] },
+  { id: "booked", label: "Booked", fields: ["name"] },
+  { id: "parked", label: "Parked", fields: ["name"] },
 ];
 
-export default function PursuitCapture({ onPreview, onSaved }: Props) {
-  const [note, setNote] = useState("");
-  const [analysis, setAnalysis] = useState<PursuitCaptureAnalysis | null>(null);
-  const [status, setStatus] = useState<"idle" | "thinking" | "saving">("idle");
-  const [error, setError] = useState("");
+const fieldLabels: Record<ActionField, string> = {
+  name: "Name",
+  business: "Business",
+  role: "Role",
+  location: "Location",
+  email: "Email",
+  demoType: "Demo type",
+};
 
-  async function analyse(event?: FormEvent<HTMLFormElement>) {
-    event?.preventDefault();
+const defaults: Record<ActionField, string> = {
+  name: "Joe Blogs",
+  business: "7Eleven Australia",
+  role: "Marketing Mgr",
+  location: "",
+  email: "",
+  demoType: "Teams",
+};
 
-    const cleanNote = note.trim();
-    if (!cleanNote) {
-      setError("Type what happened on LinkedIn first.");
-      return;
-    }
+function SmartField({ field }: { field: ActionField }) {
+  return (
+    <label className="block">
+      <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">{fieldLabels[field]}</span>
+      <input
+        data-smart-field={field}
+        defaultValue={defaults[field]}
+        placeholder={fieldLabels[field]}
+        className="mt-1 w-full border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-700 focus:border-cyan-300/60"
+      />
+    </label>
+  );
+}
 
-    setStatus("thinking");
-    setError("");
-    onPreview();
-
-    try {
-      const response = await fetch("/api/pursuits/capture", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ note: cleanNote }),
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.error ?? "Could not read that note.");
-      }
-
-      setAnalysis((await response.json()) as PursuitCaptureAnalysis);
-    } catch (captureError) {
-      setError(captureError instanceof Error ? captureError.message : "Could not read that note.");
-    } finally {
-      setStatus("idle");
-    }
-  }
-
-  async function saveDraft(draft: PursuitCaptureAnalysis) {
-    setStatus("saving");
-    setError("");
-
-    try {
-      await onSaved(draft);
-      setAnalysis(null);
-      setNote("");
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Could not save this pursuit.");
-    } finally {
-      setStatus("idle");
-    }
-  }
+export default function PursuitCapture(props: Props) {
+  void props;
+  const initialAction = actions[0];
 
   return (
-    <section className="border border-cyan-300/20 bg-[#071014] p-3 shadow-xl shadow-black/20 sm:p-4">
-      <form onSubmit={analyse}>
-        <label htmlFor="linkedin-note" className="text-sm font-medium text-white">
-          Quick capture
-        </label>
-        <textarea
-          id="linkedin-note"
-          data-pursuit-note
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          rows={3}
-          placeholder='Example: Found "Joe Blogs" from "7Eleven Australia" with role "Marketing Mgr". Message needed.'
-          className="mt-2 w-full resize-none border border-white/10 bg-black/20 p-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60"
-        />
+    <section data-quick-capture className="border border-cyan-300/20 bg-[#071014] p-3 shadow-xl shadow-black/20 sm:p-4">
+      <form data-capture-form>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="block sm:w-48">
+            <span className="text-sm font-medium text-white">Quick capture</span>
+            <select
+              data-action-select
+              defaultValue={initialAction.id}
+              className="mt-2 w-full border border-white/10 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-300/60"
+            >
+              {actions.map((action) => (
+                <option key={action.id} value={action.id}>{action.label}</option>
+              ))}
+            </select>
+          </label>
 
-        <div className="mt-3 flex flex-col gap-3">
-          <div className="flex flex-wrap gap-2">
-            {quickCaptures.map((capture) => (
-              <button
-                key={capture.label}
-                type="button"
-                data-pursuit-example={capture.note}
-                onClick={() => setNote(capture.note)}
-                className="border border-white/10 px-2.5 py-1.5 text-[11px] font-medium text-slate-300 transition hover:border-cyan-300/50 hover:text-cyan-100"
-              >
-                {capture.label}
-              </button>
+          <div data-smart-fields className="grid flex-1 gap-2 sm:grid-cols-2">
+            {initialAction.fields.map((field) => (
+              <SmartField key={field} field={field} />
             ))}
           </div>
+        </div>
 
-          <div className="flex justify-end">
-            <button
-              type="button"
-              data-pursuit-review
-              onClick={() => void analyse()}
-              disabled={status !== "idle"}
-              className="border border-cyan-300 bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {status === "thinking" ? "Reading..." : "Review"}
-            </button>
-          </div>
+        <div className="mt-3 border border-white/10 bg-black/20 p-3">
+          <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">Sentence preview</p>
+          <p data-sentence-preview className="mt-1 text-sm leading-6 text-slate-300">
+            Found &quot;Joe Blogs&quot; from &quot;7Eleven Australia&quot; with role &quot;Marketing Mgr&quot;. Message needed.
+          </p>
+        </div>
+
+        <div data-message-coach className="mt-3 border border-cyan-300/15 bg-cyan-300/[0.04] p-3" />
+
+        <div className="mt-3 flex justify-end">
+          <button
+            type="submit"
+            data-capture-review
+            className="border border-cyan-300 bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Review with AI
+          </button>
         </div>
       </form>
 
       <div data-pursuit-error className="mt-3 hidden border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100" />
       <div data-pursuit-preview />
-
-      {error && (
-        <div className="mt-4 border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">
-          {error}
-        </div>
-      )}
-
-      {analysis && (
-        <PursuitPreview
-          analysis={analysis}
-          saving={status === "saving"}
-          stages={pursuitStages}
-          onChange={setAnalysis}
-          onIgnore={() => setAnalysis(null)}
-          onSave={saveDraft}
-        />
-      )}
     </section>
   );
 }
+
 
