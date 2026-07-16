@@ -17,6 +17,12 @@ const businessInclude = {
       createdAt: "desc" as const,
     },
   },
+  pursuits: {
+    select: {
+      id: true,
+      stage: true,
+    },
+  },
   evidence: {
     orderBy: {
       capturedAt: "desc" as const,
@@ -311,3 +317,4 @@ export async function addNotebookEntryToBusiness(
 
   return note;
 }
+

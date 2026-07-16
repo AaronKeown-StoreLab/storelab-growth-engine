@@ -35,6 +35,7 @@ model Person {
   lastName    String
   linkedinUrl String?
   email       String?
+  location    String?
   phone       String?
   notes       String?
 

@@ -21,6 +21,7 @@ export type PursuitUpdateInput = {
     lastName?: string;
     role?: string;
     email?: string;
+    location?: string;
     linkedinUrl?: string;
   };
   business?: {
@@ -32,7 +33,10 @@ export type PursuitUpdateInput = {
   whyRelevant?: string;
   currentStatus?: string;
   nextAction?: string;
+  messageText?: string;
+  source?: string;
   note?: string;
+  noteOnly?: boolean;
 };
 
 function cleanText(value?: string | null) {
@@ -97,6 +101,7 @@ type IncludedPursuit = {
     lastName: string;
     linkedinUrl: string | null;
     email: string | null;
+    location: string | null;
     employments: IncludedEmployment[];
   };
   business: {
@@ -132,6 +137,7 @@ function toListItem(pursuit: IncludedPursuit): PursuitListItem {
       lastName: pursuit.person.lastName,
       linkedinUrl: pursuit.person.linkedinUrl,
       email: pursuit.person.email,
+      location: pursuit.person.location,
       role,
     },
     business: {
@@ -199,6 +205,8 @@ async function findOrCreatePerson(input: PursuitCaptureAnalysis["person"], busin
   const firstName = cleanText(input.firstName);
   const lastName = cleanText(input.lastName);
   const linkedinUrl = cleanText(input.linkedinUrl);
+  const email = cleanText(input.email);
+  const location = cleanText(input.location);
 
   if (!firstName) {
     throw new Error("Person name is required before saving a LinkedIn pursuit.");
@@ -231,6 +239,8 @@ async function findOrCreatePerson(input: PursuitCaptureAnalysis["person"], busin
         },
         data: {
           linkedinUrl: linkedinUrl || existing.linkedinUrl,
+          email: email || existing.email,
+          location: location || existing.location,
         },
       })
     : await prisma.person.create({
@@ -238,6 +248,8 @@ async function findOrCreatePerson(input: PursuitCaptureAnalysis["person"], busin
           firstName,
           lastName,
           linkedinUrl: linkedinUrl || null,
+          email: email || null,
+          location: location || null,
         },
       });
 
@@ -328,7 +340,7 @@ export async function approvePursuitCapture(analysis: PursuitCaptureAnalysis) {
       businessId: business.id,
       pursuitId: pursuit.id,
       type: cleanText(analysis.touchpointType) || analysis.stage.toLowerCase().replace(/[^a-z0-9]+/g, "_"),
-      channel: "LinkedIn",
+      channel: cleanText(analysis.source) || "LinkedIn",
       summary: touchpointSummary,
       messageText: cleanText(analysis.messageText) || cleanText(analysis.suggestedMessage) || null,
       aiNotes: cleanText(analysis.aiNotes) || cleanText(analysis.whyRelevant) || null,
@@ -336,6 +348,22 @@ export async function approvePursuitCapture(analysis: PursuitCaptureAnalysis) {
     },
   });
 
+
+  const captureNote = cleanText(analysis.captureNote);
+  if (captureNote) {
+    await prisma.contactInteraction.create({
+      data: {
+        personId: person.id,
+        businessId: business.id,
+        pursuitId: pursuit.id,
+        type: "note",
+        channel: "StoreLab OS",
+        summary: captureNote,
+        aiNotes: `Status when noted: ${analysis.stage}`,
+        occurredAt: now,
+      },
+    });
+  }
   await prisma.timelineEvent.create({
     data: {
       businessId: business.id,
@@ -363,17 +391,18 @@ export async function approvePursuitCapture(analysis: PursuitCaptureAnalysis) {
 function nextActionForManualStage(stage: PursuitStage) {
   if (stage === "Found") return "Draft a short, personal connection request.";
   if (stage === "Message Drafted") return "Review the suggested connection message, then send the LinkedIn request.";
-  if (stage === "Connection Sent") return "Wait for the connection to be accepted.";
+  if (stage === "Connection Sent") return "Monitor for the connection to be accepted.";
   if (stage === "Connected") return "Send a warm follow-up and propose a quick StoreLab demo.";
-  if (stage === "Follow-up Sent") return "Wait for a reply, then follow up lightly if they go quiet.";
-  if (stage === "Demo Proposed") return "Wait for them to accept the demo idea.";
+  if (stage === "Follow-up Sent") return "Monitor for a reply, then follow up lightly if they go quiet.";
+  if (stage === "Demo Proposed") return "Monitor for them to accept the demo idea.";
   if (stage === "Demo Accepted") return "Ask for their email address and say you will lock in time by email.";
-  if (stage === "Email / Time Requested") return "Wait for their email address or availability.";
+  if (stage === "Email / Time Requested") return "Monitor for their email address or availability.";
   if (stage === "Email Captured") return "Send an email to confirm day, time, and Teams or onsite Pymble.";
   if (stage === "Email Sent") return "Send the calendar booking once the time is agreed.";
-  if (stage === "Calendar Sent") return "Wait for the calendar booking to be accepted.";
+  if (stage === "Calendar Sent") return "Monitor for the calendar booking to be accepted.";
   if (stage === "Demo Booked") return "Prepare a short demo brief and the best StoreLab angle.";
-  if (stage === "Gone Quiet") return "Send one light nudge or park if the timing feels wrong.";
+  if (stage === "Successful Connection") return "Keep this relationship warm and watch for the next useful business signal.";
+  if (stage === "Gone Quiet") return "Try a different angle, channel, or timing before giving up.";
   if (stage === "Parked") return "Leave parked until a better signal appears.";
 
   return "Leave this relationship out of active pursuit.";
@@ -429,19 +458,56 @@ export async function updatePursuit(pursuitId: string, input: PursuitUpdateInput
   const lastName = input.person && "lastName" in input.person ? cleanText(input.person.lastName) : existing.person.lastName;
   const email = input.person && "email" in input.person ? cleanText(input.person.email) : existing.person.email ?? "";
   const linkedinUrl = input.person && "linkedinUrl" in input.person ? cleanText(input.person.linkedinUrl) : existing.person.linkedinUrl ?? "";
+  const location = input.person && "location" in input.person ? cleanText(input.person.location) : existing.person.location ?? "";
   const role = input.person && "role" in input.person ? cleanText(input.person.role) : existingRole;
   const businessName = input.business && "name" in input.business ? cleanText(input.business.name) || existing.business.name : existing.business.name;
   const stage = asPursuitStage(input.stage) ?? asStage(existing.stage);
   const now = new Date();
 
-  const business = await prisma.business.update({
-    where: {
-      id: existing.businessId,
-    },
-    data: {
-      name: businessName,
-    },
-  });
+  if (input.noteOnly) {
+    const note = cleanText(input.note);
+    if (!note) {
+      throw new Error("Note is required.");
+    }
+
+    const pursuit = await prisma.pursuit.update({
+      where: {
+        id: pursuitId,
+      },
+      data: {
+        lastInteractionAt: now,
+      },
+    });
+
+    await prisma.contactInteraction.create({
+      data: {
+        personId: existing.personId,
+        businessId: existing.businessId,
+        pursuitId: pursuit.id,
+        type: "note",
+        channel: "StoreLab OS",
+        summary: note,
+        aiNotes: `Status when noted: ${stage}`,
+        occurredAt: now,
+      },
+    });
+
+    const saved = await prisma.pursuit.findUnique({
+      where: {
+        id: pursuit.id,
+      },
+      include: pursuitInclude,
+    });
+
+    if (!saved) {
+      throw new Error("Note was added, but pursuit could not be reloaded.");
+    }
+
+    return toListItem(saved);
+  }
+  const business = normalise(businessName) === normalise(existing.business.name)
+    ? existing.business
+    : await findOrCreateBusiness(businessName);
 
   await prisma.person.update({
     where: {
@@ -451,9 +517,24 @@ export async function updatePursuit(pursuitId: string, input: PursuitUpdateInput
       firstName,
       lastName,
       email: email || null,
+      location: location || null,
       linkedinUrl: linkedinUrl || existing.person.linkedinUrl,
     },
   });
+
+  if (business.id !== existing.businessId) {
+    await prisma.employment.updateMany({
+      where: {
+        personId: existing.personId,
+        businessId: existing.businessId,
+        isCurrent: true,
+      },
+      data: {
+        isCurrent: false,
+        endDate: now,
+      },
+    });
+  }
 
   const currentEmployment = existing.person.employments.find(
     (employment) => employment.businessId === business.id && employment.isCurrent
@@ -483,6 +564,7 @@ export async function updatePursuit(pursuitId: string, input: PursuitUpdateInput
 
   const nextAction = cleanText(input.nextAction) || nextActionForManualStage(stage);
   const note = cleanText(input.note);
+  const messageText = cleanText(input.messageText);
   const displayName = `${firstName}${lastName ? ` ${lastName}` : ""}`;
 
   const pursuit = await prisma.pursuit.update({
@@ -490,10 +572,12 @@ export async function updatePursuit(pursuitId: string, input: PursuitUpdateInput
       id: pursuitId,
     },
     data: {
+      businessId: business.id,
       stage,
       priority: input.priority ?? asPriority(existing.priority),
-      storeLabAngle: cleanText(input.storeLabAngle) || null,
-      whyRelevant: cleanText(input.whyRelevant) || null,
+      storeLabAngle: Object.prototype.hasOwnProperty.call(input, "storeLabAngle") ? cleanText(input.storeLabAngle) || null : existing.storeLabAngle,
+      whyRelevant: Object.prototype.hasOwnProperty.call(input, "whyRelevant") ? cleanText(input.whyRelevant) || null : existing.whyRelevant,
+      source: Object.prototype.hasOwnProperty.call(input, "source") ? cleanText(input.source) || existing.source : existing.source,
       currentStatus: cleanText(input.currentStatus) || nextAction,
       nextAction,
       nextActionDueAt: defaultDueDateForManualStage(stage),
@@ -509,7 +593,7 @@ export async function updatePursuit(pursuitId: string, input: PursuitUpdateInput
       type: "manual_update",
       channel: "StoreLab OS",
       summary: note || `${displayName} moved to ${stage}.`,
-      messageText: null,
+      messageText: messageText || null,
       aiNotes: nextAction,
       occurredAt: now,
     },
@@ -528,5 +612,9 @@ export async function updatePursuit(pursuitId: string, input: PursuitUpdateInput
 
   return toListItem(saved);
 }
+
+
+
+
 
 

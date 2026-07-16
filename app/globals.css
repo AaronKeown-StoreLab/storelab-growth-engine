@@ -21,12 +21,20 @@
   }
 }
 
+html {
+  scrollbar-gutter: stable;
+  color-scheme: dark;
+}
+
 body {
-  background: var(--background);
+  background: #05070a;
   color: var(--foreground);
   font-family: var(--font-geist-sans);
   font-size: 14px;
+  font-weight: 400;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
 }
 
 h1,
@@ -48,6 +56,89 @@ textarea,
 select,
 span {
   letter-spacing: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+select {
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  border-radius: 0;
+}
+/* StoreLab OS unified typography system */
+*,
+*::before,
+*::after {
+  font-family: var(--font-geist-sans) !important;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-geist-mono) !important;
+}
+
+[class~="text-6xl"],
+[class~="text-5xl"],
+[class~="text-4xl"],
+[class~="text-3xl"],
+[class~="text-2xl"] {
+  font-size: 22px !important;
+  line-height: 1.12 !important;
+}
+
+[class~="text-xl"] {
+  font-size: 16px !important;
+  line-height: 1.25 !important;
+}
+
+[class~="text-lg"],
+[class~="text-base"] {
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+}
+
+[class~="text-sm"] {
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+}
+
+[class~="text-xs"] {
+  font-size: 11px !important;
+  line-height: 1.45 !important;
+}
+
+[class~="font-black"],
+[class~="font-extrabold"],
+[class~="font-bold"] {
+  font-weight: 650 !important;
+}
+
+[class~="font-semibold"] {
+  font-weight: 600 !important;
+}
+
+[class~="font-medium"] {
+  font-weight: 500 !important;
+}
+
+[class~="leading-relaxed"],
+[class~="leading-7"],
+[class~="leading-8"],
+[class~="leading-9"],
+[class~="leading-10"] {
+  line-height: 1.5 !important;
 }
 
 [class*="tracking-"] {
@@ -78,4 +169,71 @@ span {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+select {
+  color-scheme: dark;
+  appearance: auto;
+}
 
+select option {
+  background-color: #05070a;
+  color: #dbeafe;
+}
+
+select option:checked,
+select option:hover,
+select option:focus {
+  background-color: #164e63;
+  color: #ffffff;
+}
+
+
+
+
+button:not([aria-pressed]) {
+  border-color: rgba(103, 232, 249, 0.48) !important;
+  background-color: rgba(8, 47, 56, 0.58) !important;
+  color: #f8fafc !important;
+  font-size: 11px;
+  font-weight: 600;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+
+button:not([aria-pressed]):hover:not(:disabled) {
+  border-color: rgba(103, 232, 249, 0.78) !important;
+  background-color: rgba(14, 77, 91, 0.72) !important;
+  color: #ffffff !important;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+button:not([aria-pressed]),
+[data-summary-stage] {
+  white-space: nowrap;
+  line-height: 1.05;
+  text-align: center;
+}
+/* StoreLab OS unified field style */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+textarea,
+select {
+  border: 1px solid rgba(103, 232, 249, 0.25) !important;
+  background-color: #000000 !important;
+  color: #e2e8f0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+textarea:focus,
+select:focus {
+  border-color: rgba(103, 232, 249, 0.6) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #475569 !important;
+}

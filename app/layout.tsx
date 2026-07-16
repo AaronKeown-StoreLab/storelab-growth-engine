@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import PursuitRuntimeLoader from "./components/pursuit/PursuitRuntimeLoader";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,11 +14,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <head>
-        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
-        <script src="/pursuit-runtime.js" />
-      </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <PursuitRuntimeLoader />
+      </body>
     </html>
   );
 }

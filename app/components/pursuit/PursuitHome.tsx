@@ -1,9 +1,26 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useMemo, useState } from "react";
 import { PursuitCaptureAnalysis, PursuitListItem } from "../../types/pursuit";
 import PursuitCapture from "./PursuitCapture";
 import PursuitLists from "./PursuitLists";
+import PursuitAppHeader from "./PursuitAppHeader";
+
+const activeStages = new Set(["Found", "Message Drafted", "Connection Sent", "Connected", "Follow-up Sent", "Demo Proposed", "Demo Accepted", "Email / Time Requested", "Email Captured", "Email Sent", "Calendar Sent", "Demo Booked"]);
+const staleAfterDays = 90;
+
+function olderThanDays(value: string, days: number) {
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return false;
+  return Date.now() - timestamp > days * 24 * 60 * 60 * 1000;
+}
+type BusinessOption = {
+  id: string;
+  name: string;
+  peopleCount: number;
+  pursuitCount: number;
+  opportunityCount: number;
+};
 
 function sortByAttention(a: PursuitListItem, b: PursuitListItem) {
   const aDate = a.nextActionDueAt ? new Date(a.nextActionDueAt).getTime() : Number.MAX_SAFE_INTEGER;
@@ -14,7 +31,7 @@ function sortByAttention(a: PursuitListItem, b: PursuitListItem) {
   return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
 }
 
-export default function PursuitHome({ initialPursuits }: { initialPursuits: PursuitListItem[] }) {
+export default function PursuitHome({ initialPursuits, initialBusinesses }: { initialPursuits: PursuitListItem[]; initialBusinesses: BusinessOption[] }) {
   const [pursuits, setPursuits] = useState<PursuitListItem[]>(initialPursuits);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
@@ -57,47 +74,24 @@ export default function PursuitHome({ initialPursuits }: { initialPursuits: Purs
   }
 
   const stats = useMemo(() => {
-    const needsActionStages = new Set(["Found", "Message Drafted", "Connected", "Demo Accepted", "Email Captured", "Email Sent", "Demo Booked"]);
-    const waitingStages = new Set(["Connection Sent", "Follow-up Sent", "Demo Proposed", "Email / Time Requested", "Calendar Sent"]);
+    const todayStages = new Set(["Found", "Message Drafted", "Connected", "Demo Accepted", "Email Captured", "Email Sent", "Demo Booked"]);
 
     return {
-      needsAction: pursuits.filter((pursuit) => needsActionStages.has(pursuit.stage)).length,
-      waiting: pursuits.filter((pursuit) => waitingStages.has(pursuit.stage)).length,
-      recent: pursuits.length,
+      today: pursuits.filter((pursuit) => todayStages.has(pursuit.stage)).length,
+      saved: pursuits.length,
+      tactic: pursuits.filter((pursuit) => pursuit.stage === "Gone Quiet" || (activeStages.has(pursuit.stage) && olderThanDays(pursuit.updatedAt, staleAfterDays))).length,
     };
   }, [pursuits]);
 
   const orderedPursuits = useMemo(() => [...pursuits].sort(sortByAttention), [pursuits]);
+  const locationOptions = useMemo(
+    () => Array.from(new Set(pursuits.map((pursuit) => pursuit.person.location).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b)),
+    [pursuits]
+  );
 
   return (
-    <section className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-3">
-      <header className="border-b border-white/10 pb-3">
-        <div className="flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-cyan-300/80">
-              StoreLab OS
-            </p>
-            <h1 className="truncate text-2xl font-semibold tracking-tight text-white">
-              LinkedIn sidecar
-            </h1>
-          </div>
-
-          <div className="grid shrink-0 grid-cols-3 overflow-hidden border border-white/10 bg-white/[0.03] text-center">
-            <div className="min-w-14 px-2 py-2">
-              <div className="text-lg font-semibold">{stats.needsAction}</div>
-              <div className="text-[10px] text-slate-500">Today</div>
-            </div>
-            <div className="min-w-14 border-x border-white/10 px-2 py-2">
-              <div className="text-lg font-semibold">{stats.waiting}</div>
-              <div className="text-[10px] text-slate-500">Wait</div>
-            </div>
-            <div className="min-w-14 px-2 py-2">
-              <div className="text-lg font-semibold">{stats.recent}</div>
-              <div className="text-[10px] text-slate-500">Saved</div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <section className="mx-auto flex min-h-[calc(100vh-2rem)] w-full min-w-0 max-w-[430px] flex-col gap-3">
+      <PursuitAppHeader active="dashboard" stats={stats} />
 
       {notice && (
         <div className="border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-sm text-cyan-100">
@@ -106,6 +100,8 @@ export default function PursuitHome({ initialPursuits }: { initialPursuits: Purs
       )}
 
       <PursuitCapture
+        businesses={initialBusinesses}
+        locations={locationOptions}
         onPreview={() => setNotice("")}
         onSaved={handleSave}
       />
@@ -114,3 +110,4 @@ export default function PursuitHome({ initialPursuits }: { initialPursuits: Purs
     </section>
   );
 }
+

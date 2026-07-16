@@ -1,4 +1,4 @@
-﻿export const pursuitStages = [
+export const pursuitStages = [
   "Found",
   "Message Drafted",
   "Connection Sent",
@@ -11,6 +11,7 @@
   "Email Sent",
   "Calendar Sent",
   "Demo Booked",
+  "Successful Connection",
   "Gone Quiet",
   "Parked",
   "Not Relevant",
@@ -30,13 +31,15 @@ export type PursuitCaptureAnalysis = {
     lastName?: string;
     role?: string;
     linkedinUrl?: string;
+    email?: string;
+    location?: string;
   };
   business: {
     name: string;
   };
   stage: PursuitStage;
   priority: PursuitPriority;
-  source: "LinkedIn";
+  source: string;
   whatChanged: string;
   whyRelevant?: string;
   storeLabAngle?: string;
@@ -47,8 +50,8 @@ export type PursuitCaptureAnalysis = {
   messageText?: string;
   suggestedMessage?: string;
   touchpointType: string;
-  touchpointSummary: string;
-  aiNotes?: string;
+  touchpointSummary: string;  aiNotes?: string;
+  captureNote?: string;
 };
 
 export type PursuitListItem = {
@@ -71,6 +74,7 @@ export type PursuitListItem = {
     lastName: string;
     linkedinUrl?: string | null;
     email?: string | null;
+    location?: string | null;
     role?: string | null;
   };
   business: {
@@ -87,3 +91,6 @@ export type PursuitListItem = {
     occurredAt: string;
   }[];
 };
+
+
+

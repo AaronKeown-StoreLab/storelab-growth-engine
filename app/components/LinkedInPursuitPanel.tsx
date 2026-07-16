@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -111,7 +111,7 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
     [pursuits]
   );
 
-  const waiting = useMemo(
+  const monitoring = useMemo(
     () =>
       pursuits.filter(
         (pursuit) =>
@@ -358,7 +358,7 @@ export default function LinkedInPursuitPanel({ onSaved }: Props) {
 
       <div className="mt-5 grid gap-3 xl:grid-cols-3">
         <PursuitColumn title="Today" empty="Nothing needs attention." pursuits={today.slice(0, 5)} />
-        <PursuitColumn title="Waiting" empty="No LinkedIn threads waiting." pursuits={waiting.slice(0, 5)} />
+        <PursuitColumn title="Monitoring" empty="No LinkedIn threads to monitor." pursuits={monitoring.slice(0, 5)} />
         <PursuitColumn title="Recent" empty="No pursuit memory yet." pursuits={recent} />
       </div>
     </section>
@@ -409,6 +409,7 @@ function PursuitColumn({
     </div>
   );
 }
+
 
 
 

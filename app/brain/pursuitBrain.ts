@@ -1,4 +1,4 @@
-﻿import { getOpenAIClient } from "./ai/openai";
+import { getOpenAIClient } from "./ai/openai";
 import { PursuitCaptureAnalysis, PursuitStage } from "../types/pursuit";
 
 const stages: PursuitStage[] = [
@@ -113,15 +113,15 @@ function touchpointTypeForStage(stage: PursuitStage) {
 function nextActionForStage(stage: PursuitStage, teaserVideoSent: boolean) {
   if (stage === "Found") return "Draft a short, personal connection request.";
   if (stage === "Message Drafted") return "Review the suggested connection message, then send the LinkedIn request.";
-  if (stage === "Connection Sent") return "Wait for the connection to be accepted.";
+  if (stage === "Connection Sent") return "Monitor for the connection to be accepted.";
   if (stage === "Connected") return teaserVideoSent ? "Send a warm follow-up referencing the teaser video." : "Send a warm follow-up and propose a quick StoreLab demo.";
-  if (stage === "Follow-up Sent") return "Wait for a reply, then follow up lightly if they go quiet.";
-  if (stage === "Demo Proposed") return "Wait for them to accept the demo idea.";
+  if (stage === "Follow-up Sent") return "Monitor for a reply, then follow up lightly if they go quiet.";
+  if (stage === "Demo Proposed") return "Monitor for them to accept the demo idea.";
   if (stage === "Demo Accepted") return "Ask for their email address and say you will lock in time by email.";
-  if (stage === "Email / Time Requested") return "Wait for their email address or availability.";
+  if (stage === "Email / Time Requested") return "Monitor for their email address or availability.";
   if (stage === "Email Captured") return "Send an email to confirm day, time, and Teams or onsite Pymble.";
   if (stage === "Email Sent") return "Send the calendar booking once the time is agreed.";
-  if (stage === "Calendar Sent") return "Wait for the calendar booking to be accepted.";
+  if (stage === "Calendar Sent") return "Monitor for the calendar booking to be accepted.";
   if (stage === "Demo Booked") return "Prepare a short demo brief and the best StoreLab angle.";
   if (stage === "Gone Quiet") return "Send one light nudge or park if the timing feels wrong.";
   if (stage === "Parked") return "Leave parked until a better signal appears.";
@@ -548,4 +548,5 @@ Return ONLY JSON with this shape:
     return fallback;
   }
 }
+
 

@@ -14,6 +14,11 @@ export type Business = {
     summary?: string | null;
   }[];
 
+  pursuits: {
+    id: string;
+    stage: string;
+  }[];
+
   employments: {
     id: string;
     personId: string;
@@ -50,6 +55,7 @@ export type Business = {
     source?: string | null;
     capturedAt: string;
   }[];
+
   notebookEntries: {
     id: string;
     content: string;
@@ -72,7 +78,3 @@ export type Business = {
     occurredAt: string;
   }[];
 };
-
-
-
-
