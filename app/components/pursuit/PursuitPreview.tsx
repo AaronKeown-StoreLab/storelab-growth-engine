@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useState } from "react";
+import { useState, KeyboardEvent, useRef, useEffect } from "react";
 import { PursuitCaptureAnalysis, PursuitStage } from "../../types/pursuit";
 
 type Props = {
@@ -12,192 +12,157 @@ type Props = {
   onSave: (analysis: PursuitCaptureAnalysis) => Promise<void>;
 };
 
-type EditableField =
-  | "firstName"
-  | "lastName"
-  | "role"
-  | "business"
-  | "nextAction"
-  | "suggestedMessage"
-  | "whyRelevant"
-  | "storeLabAngle";
-
-function Field({
-  label,
-  value,
-  onChange,
-  multiline = false,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  multiline?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="text-[10px] font-medium uppercase text-slate-500">
-        {label}
-      </span>
-      {multiline ? (
-        <textarea
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          rows={3}
-          className="mt-2 w-full resize-none border border-white/10 bg-black/20 px-3 py-2 text-sm leading-6 text-white outline-none focus:border-cyan-300/60"
-        />
-      ) : (
-        <input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="mt-2 w-full border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/60"
-        />
-      )}
-    </label>
-  );
-}
-
-export default function PursuitPreview({
-  analysis,
-  saving,
-  stages,
-  onChange,
-  onIgnore,
-  onSave,
-}: Props) {
+export default function PursuitPreview({ analysis, saving, stages, onChange, onIgnore, onSave }: Props) {
   const [editing, setEditing] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [isChatting, setIsChatting] = useState(false);
+  const [chatHistory, setChatHistory] = useState<{role: 'user' | 'jeevs', text: string}[]>([]);
+  
+  const chatEndRef = useRef<HTMLDivElement>(null);
   const personName = `${analysis.person.firstName} ${analysis.person.lastName ?? ""}`.trim();
 
-  function update(path: EditableField, value: string) {
-    if (path === "business") {
-      onChange({
-        ...analysis,
-        business: {
-          ...analysis.business,
-          name: value,
-        },
-      });
-      return;
-    }
+  // Scroll to the bottom of the chat when Jeevs speaks
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatHistory]);
 
-    if (path === "firstName" || path === "lastName" || path === "role") {
-      onChange({
-        ...analysis,
-        person: {
-          ...analysis.person,
-          [path]: value,
-        },
-      });
-      return;
-    }
-
-    onChange({
-      ...analysis,
-      [path]: value,
-    });
+  function update(path: string, value: string) {
+    const newAnalysis = { ...analysis };
+    if (path === "business") newAnalysis.business.name = value;
+    else if (["firstName", "lastName", "role"].includes(path)) (newAnalysis.person as any)[path] = value;
+    else (newAnalysis as any)[path] = value;
+    onChange(newAnalysis);
   }
 
-  function updateStage(event: ChangeEvent<HTMLSelectElement>) {
-    const stage = event.target.value as PursuitStage;
-    onChange({
-      ...analysis,
-      stage,
-    });
+  async function handleJeevsChat(e?: KeyboardEvent<HTMLInputElement>) {
+    if (e && e.key !== 'Enter') return;
+    if (!chatInput.trim() || isChatting) return;
+
+    const userMessage = chatInput;
+    setChatHistory(prev => [...prev, { role: 'user', text: userMessage }]);
+    setChatInput("");
+    setIsChatting(true);
+
+    try {
+      const response = await fetch("/api/message-coach", {
+        method: "POST",
+        body: JSON.stringify({
+          fields: { ...analysis.person, business: analysis.business.name },
+          messageDirection: userMessage,
+          currentMessage: analysis.suggestedMessage,
+          chatHistory: chatHistory
+        }),
+      });
+      const data = await response.json();
+      
+      if (data.updatedDraft) {
+        update("suggestedMessage", data.updatedDraft);
+        setChatHistory(prev => [...prev, { role: 'jeevs', text: data.jeevsComment }]);
+      }
+    } catch (err) {
+      setChatHistory(prev => [...prev, { role: 'jeevs', text: "Sorry Aaron, I lost my train of thought. Try again?" }]);
+    } finally {
+      setIsChatting(false);
+    }
   }
 
   return (
-    <div className="mt-3 border border-white/10 bg-white/[0.025] p-3">
-      <div className="flex flex-col gap-3">
+    <div className="mt-3 border border-white/10 bg-[#0a0a0a] p-0 shadow-2xl rounded-lg overflow-hidden">
+      {/* Header */}
+      <div className="bg-white/[0.03] p-4 border-b border-white/5 flex justify-between items-center">
         <div>
-          <p className="text-[10px] font-semibold uppercase text-cyan-300">
-            Review before saving
-          </p>
-          <h2 className="mt-1 text-sm font-semibold text-white">
-            {personName || "New person"} at {analysis.business.name || "new company"}
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            {personName} <span className="text-slate-600 text-sm font-normal">@</span> {analysis.business.name}
           </h2>
-          <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-400">
-            {analysis.whatChanged}
-          </p>
+          <p className="text-[10px] text-cyan-500 font-black uppercase tracking-tighter">Growth Opportunity Found</p>
         </div>
-
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setEditing((current) => !current)}
-            className="h-9 border border-white/10 px-3 text-xs text-slate-200 hover:border-white/25"
-          >
-            {editing ? "Done" : "Edit"}
-          </button>
-          <button
-            type="button"
-            onClick={onIgnore}
-            className="h-9 border border-white/10 px-3 text-xs text-slate-500 hover:border-white/25 hover:text-white"
-          >
-            Ignore
-          </button>
+            <button onClick={() => setEditing(!editing)} className="text-[10px] text-slate-400 hover:text-white uppercase font-bold tracking-widest">
+                {editing ? "Close Editor" : "Manual Edit"}
+            </button>
+            <button onClick={onIgnore} className="text-[10px] text-red-900 hover:text-red-500 uppercase font-bold tracking-widest">Discard</button>
         </div>
       </div>
 
-      {editing ? (
-        <div className="mt-3 grid gap-2 md:grid-cols-2">
-          <Field label="First name" value={analysis.person.firstName} onChange={(value) => update("firstName", value)} />
-          <Field label="Last name" value={analysis.person.lastName ?? ""} onChange={(value) => update("lastName", value)} />
-          <Field label="Role" value={analysis.person.role ?? ""} onChange={(value) => update("role", value)} />
-          <Field label="Company" value={analysis.business.name} onChange={(value) => update("business", value)} />
-          <label className="block">
-            <span className="text-[10px] font-medium uppercase text-slate-500">
-              Stage
-            </span>
-            <select
-              value={analysis.stage}
-              onChange={updateStage}
-              className="mt-2 w-full border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/60"
-            >
-              {stages.map((stage) => (
-                <option key={stage} value={stage}>
-                  {stage}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Field label="StoreLab angle" value={analysis.storeLabAngle ?? ""} onChange={(value) => update("storeLabAngle", value)} />
-          <Field label="Why this matters" value={analysis.whyRelevant ?? ""} onChange={(value) => update("whyRelevant", value)} multiline />
-          <Field label="Next action" value={analysis.nextAction} onChange={(value) => update("nextAction", value)} multiline />
-          <div className="md:col-span-2">
-            <Field label="Draft message" value={analysis.suggestedMessage ?? ""} onChange={(value) => update("suggestedMessage", value)} multiline />
-          </div>
+      <div className="p-4 grid gap-6 md:grid-cols-2">
+        {/* Left Side: The Draft & Editor */}
+        <div className="space-y-4">
+            <div className="bg-black/40 border border-white/5 p-4 rounded-md">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-3 tracking-widest border-b border-white/5 pb-2">The Outreach Draft</p>
+                {editing ? (
+                    <textarea 
+                        value={analysis.suggestedMessage} 
+                        onChange={e => update("suggestedMessage", e.target.value)}
+                        className="w-full bg-transparent text-sm text-slate-200 leading-7 outline-none min-h-[150px]"
+                    />
+                ) : (
+                    <p className="text-sm text-slate-200 leading-7 whitespace-pre-wrap">
+                        {analysis.suggestedMessage || "No draft created yet..."}
+                    </p>
+                )}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2">
+                <div className="bg-white/[0.02] border border-white/5 p-2 px-3 rounded">
+                    <p className="text-[8px] text-slate-500 uppercase font-bold">Stage</p>
+                    <p className="text-xs text-slate-300 mt-1">{analysis.stage}</p>
+                </div>
+                <div className="bg-white/[0.02] border border-white/5 p-2 px-3 rounded">
+                    <p className="text-[8px] text-slate-500 uppercase font-bold">Next Action</p>
+                    <p className="text-xs text-slate-300 mt-1 line-clamp-1">{analysis.nextAction}</p>
+                </div>
+            </div>
         </div>
-      ) : (
-        <div className="mt-3 grid gap-2 md:grid-cols-3">
-          <div className="border border-white/10 bg-black/20 p-3">
-            <p className="text-[10px] uppercase text-slate-500">Stage</p>
-            <p className="mt-2 text-sm font-medium text-white">{analysis.stage}</p>
-          </div>
-          <div className="border border-white/10 bg-black/20 p-3">
-            <p className="text-[10px] uppercase text-slate-500">Next action</p>
-            <p className="mt-2 text-sm leading-6 text-white">{analysis.nextAction}</p>
-          </div>
-          <div className="border border-white/10 bg-black/20 p-3">
-            <p className="text-[10px] uppercase text-slate-500">Why it matters</p>
-            <p className="mt-2 text-sm leading-6 text-white">{analysis.whyRelevant || analysis.storeLabAngle || "Not known yet"}</p>
-          </div>
-        </div>
-      )}
 
-      {analysis.suggestedMessage && !editing && (
-        <div className="mt-4 border border-cyan-300/15 bg-cyan-300/5 p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-cyan-300">Suggested message</p>
-          <p className="mt-2 text-sm leading-6 text-slate-100">{analysis.suggestedMessage}</p>
-        </div>
-      )}
+        {/* Right Side: Chat with Jeevs */}
+        <div className="flex flex-col h-full min-h-[300px] bg-black/20 rounded-md border border-white/5">
+            <div className="p-3 border-b border-white/5 bg-white/[0.01]">
+                <p className="text-[10px] font-bold text-cyan-500 uppercase tracking-widest">Chat with Jeevs</p>
+            </div>
+            
+            {/* Conversation Area */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[250px] scrollbar-hide">
+                {chatHistory.length === 0 && (
+                    <p className="text-xs text-slate-600 italic">"Hey Aaron, want me to change the tone or add a specific detail? Just tell me below."</p>
+                )}
+                {chatHistory.map((chat, i) => (
+                    <div key={i} className={`flex ${chat.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] rounded-lg p-3 text-xs leading-5 ${
+                            chat.role === 'user' 
+                            ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-100' 
+                            : 'bg-white/5 border border-white/10 text-slate-300'
+                        }`}>
+                            <p className="font-bold text-[8px] uppercase mb-1 opacity-50">{chat.role === 'user' ? 'You' : 'Jeevs'}</p>
+                            {chat.text}
+                        </div>
+                    </div>
+                ))}
+                {isChatting && <div className="text-[10px] text-cyan-500 animate-pulse">Jeevs is typing...</div>}
+                <div ref={chatEndRef} />
+            </div>
 
-      <div className="mt-5 flex justify-end">
+            {/* Chat Input */}
+            <div className="p-3 bg-black/40 mt-auto">
+                <input 
+                    type="text" 
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={handleJeevsChat}
+                    placeholder="Talk to Jeevs..."
+                    className="w-full bg-transparent border-b border-white/10 py-2 text-sm text-white placeholder:text-slate-700 outline-none focus:border-cyan-500 transition-all"
+                />
+            </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="p-4 bg-white/[0.02] border-t border-white/5 flex justify-end">
         <button
-          type="button"
           disabled={saving}
           onClick={() => onSave(analysis)}
-          className="h-9 border border-cyan-300 bg-cyan-300 px-4 text-xs font-semibold text-black transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-10 bg-cyan-500 hover:bg-white px-10 text-[11px] font-black uppercase tracking-[0.2em] text-black transition-all rounded-sm"
         >
-          {saving ? "Saving..." : "Save to memory"}
+          {saving ? "Saving..." : "Confirm & Save to Memory"}
         </button>
       </div>
     </div>

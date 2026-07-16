@@ -3,8 +3,14 @@ import { approvePursuitCapture, listPursuits } from "../repositories/pursuitRepo
 import { loadBusinesses } from "./businessService";
 import { PursuitCaptureAnalysis } from "../types/pursuit";
 
-function cleanText(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
+// --- NEW CLEANER: Removes hidden "junk" from LinkedIn HTML to save money ---
+function distillLinkedInText(text: string): string {
+  if (!text) return "";
+  // If it looks like raw HTML, we strip out the tags (the expensive part)
+  if (text.includes('<') && text.includes('>')) {
+    return text.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+  }
+  return text.trim();
 }
 
 export async function listLinkedInPursuits() {
@@ -12,7 +18,8 @@ export async function listLinkedInPursuits() {
 }
 
 export async function analyseLinkedInPursuitNote(input: { note?: unknown }) {
-  const note = cleanText(input.note);
+  // Scrub the text immediately to save money
+  const note = distillLinkedInText(String(input.note ?? ""));
 
   if (!note) {
     throw new Error("Tell StoreLab what happened on LinkedIn first.");
@@ -44,6 +51,5 @@ export async function approveLinkedInPursuit(input: { analysis?: PursuitCaptureA
   if (!input.analysis) {
     throw new Error("Review a LinkedIn pursuit update before saving it.");
   }
-
   return approvePursuitCapture(input.analysis);
 }

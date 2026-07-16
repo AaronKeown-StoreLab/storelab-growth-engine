@@ -1,96 +1,60 @@
 import { NextResponse } from "next/server";
 import { getOpenAIClient } from "../../brain/ai/openai";
 
-function cleanText(value: unknown) {
-  return String(value || "").replace(/\s+/g, " ").trim();
-}
-
-function cleanJsonResult(value: string) {
-  return value
-    .trim()
-    .replace(/^```(?:json)?/i, "")
-    .replace(/```$/i, "")
-    .trim();
-}
-
-function normaliseMessages(value: unknown) {
-  if (!value || typeof value !== "object" || !("messages" in value)) return [];
-
-  const messages = (value as { messages?: unknown }).messages;
-  if (!Array.isArray(messages)) return [];
-
-  return messages
-    .map((message) => cleanText(message))
-    .filter(Boolean)
-    .slice(0, 3);
-}
-
 export async function POST(request: Request) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json({ error: "Add OPENAI_API_KEY to .env.local, then restart StoreLab OS." }, { status: 501 });
-    }
+    const { fields, messageDirection, currentMessage, chatHistory } = await request.json();
+    const firstName = fields.firstName || fields.name?.split(' ')[0] || "there";
 
-    const body = await request.json();
-    const fields = body.fields && typeof body.fields === "object" ? body.fields : {};
+    const STORELAB_WISDOM = `
+      - StoreLab helps retail and brand teams grow via shopper engagement and retail execution.
+      - We focus on making retail space more productive and measurable.
+      - Our tone is 'Elite but Human'. We are helpful experts, not salespeople.
+      - We avoid "Hope you are well" or "Checking in".
+    `;
+
     const prompt = `
-You are StoreLab OS Message Coach for Aaron, founder/operator of StoreLab.
+      You are "Mate", Aaron's right-hand growth partner at StoreLab.
+      Your vibe: Supportive, sharp, quintessential Australian/collaborative partner. 
+      You don't act like a robot; you act like a colleague who's great at writing and obsessed with growth.
+      
+      KNOWLEDGE:
+      ${STORELAB_WISDOM}
 
-Write short, natural LinkedIn or email messages that help Aaron build a relationship and progress toward a StoreLab demo.
-This is not a CRM and not generic sales automation. Sound like a real person.
+      CONTEXT:
+      Aaron is talking to: ${firstName} at ${fields.business}
+      
+      HISTORY:
+      ${chatHistory?.map((h: any) => `${h.role === 'user' ? 'Aaron' : 'Mate'}: ${h.text}`).join('\n')}
 
-Rules:
-- Use Aaron's direction as instruction/context, never paste it verbatim unless it is already a polished draft. Interpret shorthand like "he is new to the job", "his mate Aaron works there too", "already know them", or "cc'd on email" into a natural relationship-aware message.
-- If the note says they are new to the job or recently moved role, congratulate them and keep it soft. Give them room to settle.
-- If Aaron already knows them, has been copied on email, or is working with them, write like there is existing familiarity.
-- Avoid hype, buzzwords, "hope this finds you well", and pushy demo language.
-- Keep each option under 55 words unless the action is an email body.
-- Return three meaningfully different options: one warm/direct, one softer/light-touch, and one practical/business-focused.
+      LATEST REQUEST: "${messageDirection}"
 
-Context:
-Action: ${cleanText(body.actionId)}
-Draft mode: ${cleanText(body.draftMode)}
-Person: ${cleanText((fields as Record<string, unknown>).name)}
-Business: ${cleanText((fields as Record<string, unknown>).business)}
-Role: ${cleanText((fields as Record<string, unknown>).role)}
-Location: ${cleanText((fields as Record<string, unknown>).location)}
-Demo type: ${cleanText((fields as Record<string, unknown>).demoType)}
-Aaron's direction/context: ${cleanText(body.messageDirection)}
-Aaron's rough draft, if improving: ${cleanText(body.roughDraft)}
-Previous sent message to reference: ${cleanText(body.messageReference)}
-Current draft currently shown to Aaron: ${cleanText(body.currentMessage)}
+      PLAYBOOK:
+      1. Rewrite the draft to be punchy and personalized. 
+      2. Always use first name: ${firstName}.
+      3. In 'jeevsComment', talk to Aaron like a mate. Short, encouraging, explaining what you did.
 
-If there is a current draft and Aaron gives direction, revise that draft. Do not ignore the existing draft unless Aaron asks for a fresh version. If Aaron gives a rough context note rather than prose, infer the useful relationship signal and write a proper message from scratch.
-If Aaron says things like "shorter", "warmer", "less salesy", "mention new role", or "I already know them", apply that instruction to the current draft.
+      Return ONLY JSON:
+      {
+        "jeevsComment": "string",
+        "updatedDraft": "string"
+      }
+    `;
 
-Return ONLY JSON:
-{"messages":["option one","option two","option three"]}
-`;
-
-    const response = await getOpenAIClient().responses.create({
-      model: "gpt-4.1-mini",
-      input: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
+    const response = await getOpenAIClient().chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" }
     });
 
-    const messages = normaliseMessages(JSON.parse(cleanJsonResult(response.output_text)));
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    return NextResponse.json({
+      jeevsComment: result.jeevsComment,
+      updatedDraft: result.updatedDraft,
+      messages: [result.updatedDraft]
+    });
 
-    if (!messages.length) {
-      return NextResponse.json({ error: "No message options returned." }, { status: 502 });
-    }
-
-    return NextResponse.json({ messages });
-  } catch (error) {
-    console.error("Message Coach fallback used:", error);
-
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Could not generate messages." },
-      { status: 500 }
-    );
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-
